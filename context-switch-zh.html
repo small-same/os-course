@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>時鐘中斷與上下文切換 一步一步看</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --navy:#0E1B2E; --navy2:#132741; --panel:#183253; --panel2:#1d3c61;
+    --line:#284a70; --line2:#33587f;
+    --ink:#EAF1F8; --mute:#9FB6CF; --dim:#6f89a4;
+    --blue:#4A93D6; --cyan:#2DC7D8; --amber:#F2B84B; --green:#54C878; --red:#EA6B5E;
+    --mono:"IBM Plex Mono","Consolas",monospace;
+    --sans:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; min-height:100vh; color:var(--ink); font-family:var(--sans);
+    background:radial-gradient(1200px 700px at 50% -10%, #17304f 0%, rgba(23,48,79,0) 60%), var(--navy);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1240px; margin:0 auto; padding:clamp(16px,3vw,30px) clamp(14px,3vw,26px) 28px;
+    display:flex; flex-direction:column; gap:clamp(10px,1.8vh,16px);}
+
+  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--cyan); display:flex; align-items:center; gap:10px;}
+  .eyebrow::before{content:""; width:26px; height:2px; background:var(--cyan);}
+  h1{margin:4px 0 2px; font-weight:900; font-size:clamp(23px,3.6vw,34px); line-height:1.15;}
+  h1 span{color:var(--cyan);}
+  .sub{color:var(--mute); font-size:14px; line-height:1.6; margin:0;}
+
+  .tabs{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;}
+  .tabs button{font-family:var(--sans); font-size:13.5px; font-weight:700; color:var(--mute);
+    background:var(--navy2); border:1px solid var(--line); border-radius:999px;
+    padding:8px 16px; cursor:pointer; transition:.18s;}
+  .tabs button:hover{color:var(--ink); border-color:var(--line2);}
+  .tabs button[aria-selected="true"]{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+
+  .stage{background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.45));
+    border:1px solid var(--line); border-radius:16px; padding:clamp(14px,2.4vw,24px);}
+  .stagehead{display:flex; justify-content:space-between; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:14px;}
+  .stagehead h2{margin:0; font-size:clamp(17px,2.4vw,21px); font-weight:700;}
+  .stagehead .note{font-size:12.5px; color:var(--dim); font-family:var(--mono);}
+
+  .cols{display:grid; gap:14px; grid-template-columns:1fr 1fr;}
+  .cols3{display:grid; gap:12px; grid-template-columns:1fr 1fr 1fr;}
+  @media(max-width:900px){.cols,.cols3{grid-template-columns:1fr;}}
+
+  .box{background:var(--navy); border:1px solid var(--line); border-radius:12px; padding:14px 16px;}
+  .box h3{margin:0 0 10px; font-size:13px; letter-spacing:.06em; color:var(--mute); font-weight:700;}
+  .box.hot{border-color:var(--cyan); box-shadow:0 0 0 1px rgba(45,199,216,.3);}
+  .box.hotr{border-color:var(--red); box-shadow:0 0 0 1px rgba(234,107,94,.35);}
+
+  /* kernel stacks */
+  .stk{display:flex; flex-direction:column-reverse; gap:4px; min-height:172px; justify-content:flex-start;}
+  .cell{border:1px solid var(--line); border-radius:7px; padding:7px 10px; font-family:var(--mono);
+    font-size:11.5px; color:var(--mute); background:var(--navy2); transition:.35s;}
+  .cell.filled{color:var(--blue); border-color:var(--blue); background:rgba(74,147,214,.13);}
+  .cell.filled.b{color:var(--green); border-color:var(--green); background:rgba(84,200,120,.13);}
+  .cell.empty{opacity:.3; border-style:dashed;}
+  .sp{display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:12px;
+    font-weight:600; color:var(--amber); margin-bottom:9px; transition:.35s;}
+  .sp .tag{background:var(--amber); color:#2a1d00; border-radius:5px; padding:2px 8px;}
+  .sp.off{opacity:.18;}
+
+  .proc{display:flex; flex-direction:column; gap:5px;}
+  .preg{display:flex; justify-content:space-between; border:1px solid var(--line); border-radius:7px;
+    padding:6px 10px; font-family:var(--mono); font-size:11.5px; color:var(--dim); transition:.35s;}
+  .preg.set{color:var(--ink); border-color:var(--line2); background:var(--panel);}
+  .preg.set.hl{border-color:var(--cyan); background:rgba(45,199,216,.14); color:var(--cyan);}
+
+  /* steps list */
+  .steps{display:flex; flex-direction:column; gap:7px;}
+  .st{display:grid; grid-template-columns:28px 1fr; gap:10px; align-items:center;
+    border:1px solid var(--line); border-radius:9px; padding:10px 12px; opacity:.35; transition:.3s; font-size:13px; line-height:1.45;}
+  .st .n{width:28px; height:28px; border-radius:50%; background:var(--panel); color:var(--mute);
+    display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:12px; font-weight:600;}
+  .st.on{opacity:1;}
+  .st.act{opacity:1; border-color:var(--cyan); background:rgba(45,199,216,.12);}
+  .st.act .n{background:var(--cyan); color:#06202c;}
+  .st.star{border-color:var(--red);}
+  .st.star.act{background:rgba(234,107,94,.15); box-shadow:0 0 0 1px rgba(234,107,94,.4);}
+  .st.star.act .n{background:var(--red); color:#2a0b07;}
+
+  /* three lanes */
+  .lanes{position:relative; height:250px; margin:4px 0;}
+  .lane{position:absolute; left:96px; right:0; height:46px; border-radius:10px; border:1px solid var(--line);}
+  .lane.a{top:10px; background:rgba(74,147,214,.09);}
+  .lane.k{top:100px; background:rgba(242,184,75,.10);}
+  .lane.b{top:190px; background:rgba(84,200,120,.09);}
+  .lanelbl{position:absolute; left:0; width:88px; text-align:right; font-size:12px; font-weight:700; line-height:1.3;}
+  .lanelbl.a{top:18px; color:var(--blue);} .lanelbl.k{top:108px; color:var(--amber);} .lanelbl.b{top:198px; color:var(--green);}
+  .runner{position:absolute; height:24px; border-radius:6px; left:106px; width:120px;
+    font-size:11.5px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    transition:all .55s cubic-bezier(.5,.05,.3,1); top:21px; background:var(--blue); color:#02121f;}
+  .runner.k{top:111px; background:var(--amber); color:#2a1d00;}
+  .runner.b{top:201px; background:var(--green); color:#04220f;}
+
+  .term{background:#08131f; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+    font-family:var(--mono); font-size:12.5px; line-height:1.65; color:#cfe3f5; min-height:120px; white-space:pre-wrap;}
+  .term .os{color:var(--amber);} .term .pg{color:var(--blue);} .term .b2{color:var(--green);}
+  .term .ok{color:var(--green);} .term .no{color:var(--red);}
+
+  .msg{margin-top:12px; border-left:3px solid var(--cyan); background:rgba(45,199,216,.07);
+    padding:11px 14px; border-radius:0 9px 9px 0; font-size:13.5px; line-height:1.6; min-height:62px;}
+  .msg.key{border-left-color:var(--red); background:rgba(234,107,94,.08);}
+  .msg b{color:var(--cyan);} .msg.key b{color:var(--red);}
+
+  .ctl{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px;}
+  .ctl button{font-family:var(--sans); font-size:13px; font-weight:700; color:var(--ink);
+    background:var(--panel); border:1px solid var(--line2); border-radius:9px; padding:8px 15px; cursor:pointer; transition:.16s;}
+  .ctl button:hover:not(:disabled){background:var(--panel2); border-color:var(--cyan);}
+  .ctl button:disabled{opacity:.35; cursor:default;}
+  .ctl .prim{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+  .dots{display:flex; gap:6px; margin-left:auto;}
+  .dots i{width:8px; height:8px; border-radius:50%; background:var(--line2); cursor:pointer; transition:.2s;}
+  .dots i.on{background:var(--cyan); transform:scale(1.25);}
+  .seg{display:inline-flex; border:1px solid var(--line2); border-radius:9px; overflow:hidden;}
+  .seg button{border:0; border-radius:0; background:var(--navy2); padding:7px 14px; font-size:12.5px;}
+  .seg button[aria-pressed="true"]{background:var(--amber); color:#2a1d00;}
+
+  table.cmp{width:100%; border-collapse:collapse; font-size:13px;}
+  table.cmp th,table.cmp td{border:1px solid var(--line); padding:9px 11px; text-align:left;}
+  table.cmp th{background:var(--panel); color:var(--mute); font-size:12px; font-weight:700;}
+  table.cmp td.n{font-family:var(--mono);}
+  table.cmp .hi{color:var(--red); font-weight:700;}
+  table.cmp .lo{color:var(--green); font-weight:700;}
+
+  footer{color:var(--dim); font-family:var(--mono); font-size:11.5px; line-height:1.7; margin-top:6px;}
+  .kbd{font-family:var(--mono); font-size:11px; background:var(--panel); border:1px solid var(--line2);
+    border-radius:5px; padding:1px 6px; color:var(--mute);}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">OSTEP 第 6 章 · 第 3 週</div>
+  <h1><span>時鐘中斷</span>與上下文切換</h1>
+  <p class="sub">OS 怎麼從一個正在跑的行程手上把 CPU 拿回來，再交給另一個？最關鍵的那一步是「換堆疊指標」。</p>
+
+  <div class="tabs" id="tabs" role="tablist"></div>
+
+  <div class="stage">
+    <div class="stagehead">
+      <h2 id="ttl"></h2>
+      <div class="note" id="note"></div>
+    </div>
+    <div id="body"></div>
+    <div class="msg" id="msg"></div>
+    <div class="ctl">
+      <button id="prev">← 上一步</button>
+      <button id="next" class="prim">下一步 →</button>
+      <button id="reset">重來</button>
+      <span id="extra"></span>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+
+  <footer>
+    鍵盤：<span class="kbd">←</span> <span class="kbd">→</span> 逐步　·　<span class="kbd">R</span> 重來<br>
+    樹德科技大學 資訊工程系　·　作業系統　·　教材：OSTEP 第 6 章
+  </footer>
+</div>
+
+<script>
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var esc = function(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+
+/* ==================== 分頁 1：圖 6.3 全景 ==================== */
+var PAN = [
+  { pos:"a", x:106, w:150, lbl:"行程 A 在跑", term:"<span class='pg'>行程 A 在使用者模式執行中…</span>",
+    msg:"行程 A 正在使用者模式跑。OS <b>不在 CPU 上</b>——它沒辦法主動做任何事。" },
+  { pos:"a", x:106, w:150, lbl:"行程 A 在跑", term:"<span class='pg'>行程 A 執行中…</span>\n<span class='os'>⏰ 時鐘：10ms 到了</span>",
+    msg:"時鐘裝置每隔幾毫秒響一次。這是<b>硬體</b>發動的，行程 A 沒有參與，也<b>沒辦法拒絕</b>。" },
+  { pos:"k", x:250, w:200, lbl:"核心：中斷處理程式", term:"<span class='no'>中斷！</span>\n<span class='os'>硬體：存 A 的暫存器 → A 的核心堆疊</span>\n<span class='os'>硬體：升到核心模式</span>\n<span class='os'>硬體：跳到時鐘中斷處理程式</span>",
+    msg:"控制權被硬體強制拉進核心。這就是 OS 重新拿回 CPU 的方式——<b>不需要行程配合</b>。" },
+  { pos:"k", x:250, w:200, lbl:"核心：排程器決定", term:"<span class='os'>[OS] 排程器：要繼續跑 A，還是換 B？</span>\n<span class='os'>[OS] 決定換 B → 呼叫 switch(A→B)</span>",
+    msg:"OS 問排程器：繼續 A 還是換人？這是<b>策略</b>問題（第 7 章）。這裡決定換 B。" },
+  { pos:"b", x:470, w:150, lbl:"行程 B 在跑", term:"<span class='ok'>return-from-trap</span>\n<span class='b2'>行程 B 從上次被打斷的地方繼續跑</span>",
+    msg:"<b>進核心時是 A，出核心時變成 B。</b>中間到底怎麼換的？那正是下一個分頁要拆開看的 switch()。" }
+];
+
+function renderPan(st){
+  var s = PAN[st];
+  $("body").innerHTML =
+    "<div class='box' style='margin-bottom:14px'><h3>圖 6.3　一次時鐘中斷，換掉一個行程</h3>" +
+      "<div class='lanes'>" +
+        "<div class='lanelbl a'>行程 A<br>（使用者）</div><div class='lane a'></div>" +
+        "<div class='lanelbl k'>核心模式<br>（OS）</div><div class='lane k'></div>" +
+        "<div class='lanelbl b'>行程 B<br>（使用者）</div><div class='lane b'></div>" +
+        "<div class='runner " + s.pos + "' style='left:" + s.x + "px;width:" + s.w + "px'>" + esc(s.lbl) + "</div>" +
+      "</div>" +
+      "<div style='font-family:var(--mono);font-size:11px;color:var(--dim);padding:0 4px;'>時間 →</div>" +
+    "</div>" +
+    "<div class='term'>" + s.term + "</div>";
+  $("msg").className = "msg" + (st === 4 ? " key" : "");
+  $("msg").innerHTML = s.msg;
+  $("extra").innerHTML = "";
+}
+
+/* ==================== 分頁 2：switch() 換堆疊 ==================== */
+/* 每一步的狀態：A 核心堆疊內容、B 核心堆疊內容、A/B proc 結構、SP 指向誰 */
+var SW = [
+  { sp:"a", aStk:["A 的使用者暫存器"], bStk:["B 的使用者暫存器"], aProc:[], bProc:["B 的核心暫存器"], act:-1,
+    msg:"開場。A 剛被時鐘中斷打斷，硬體已經把<b>A 的使用者暫存器</b>存到 A 的核心堆疊上。堆疊指標 SP 現在指著 A 的核心堆疊。<br>B 是之前被換下來的，它的核心暫存器存在 B 的行程結構裡。" },
+  { sp:"a", aStk:["A 的使用者暫存器"], bStk:["B 的使用者暫存器"], aProc:["A 的核心暫存器"], bProc:["B 的核心暫存器"], act:0,
+    msg:"<b>① 存下 A 的核心暫存器</b>，放進 A 的行程結構 (proc structure)。注意這是<b>軟體</b>做的——就是 switch() 這段程式碼自己在搬。" },
+  { sp:"b", aStk:["A 的使用者暫存器"], bStk:["B 的使用者暫存器"], aProc:["A 的核心暫存器"], bProc:["B 的核心暫存器"], act:1, key:true,
+    msg:"<b>② ★ 把堆疊指標換成 B 的核心堆疊。</b><br>看清楚 SP 標籤跳過去了。進 switch() 的時候我們站在 A 的堆疊上，執行完這一行就站在 B 的堆疊上——<b>控制權就是在這一行轉移的</b>，前後都只是在搬暫存器而已。" },
+  { sp:"b", aStk:["A 的使用者暫存器"], bStk:["B 的使用者暫存器"], aProc:["A 的核心暫存器"], bProc:[], act:2,
+    msg:"<b>③ 還原 B 的核心暫存器</b>，從 B 的行程結構裡讀回來。現在 CPU 裡的核心狀態完全是 B 的了。" },
+  { sp:"b", aStk:["A 的使用者暫存器"], bStk:[], aProc:["A 的核心暫存器"], bProc:[], act:3, done:true,
+    msg:"接著 <b>return-from-trap</b>。硬體要還原的使用者暫存器就放在「現在站著的」核心堆疊上——而現在站的是 <b>B 的</b>，所以還原出來的是 B 上次被中斷時的狀態，B 就從那裡繼續跑。<br><br>A 的東西完好地留在 A 的堆疊和行程結構裡，等下次輪到它。" }
+];
+var SWSTEPS = [
+  { n:"①", t:"存下 A 的核心暫存器 → A 的行程結構" },
+  { n:"②", t:"★ 把堆疊指標換成 B 的核心堆疊", star:true },
+  { n:"③", t:"還原 B 的核心暫存器 ← B 的行程結構" },
+  { n:"④", t:"return-from-trap → 回到 B 的使用者模式" }
+];
+
+function stkHtml(items, who){
+  var cells = items.map(function(x){ return "<div class='cell filled" + (who === "b" ? " b" : "") + "'>" + esc(x) + "</div>"; });
+  while(cells.length < 2) cells.push("<div class='cell empty'>（空）</div>");
+  return "<div class='stk'>" + cells.join("") + "</div>";
+}
+function procHtml(items, who){
+  if(!items.length) return "<div class='proc'><div class='preg'><span>（已取出）</span><span>—</span></div></div>";
+  return "<div class='proc'>" + items.map(function(x){
+    return "<div class='preg set" + (who === "a" ? " hl" : "") + "'><span>" + esc(x) + "</span><span>saved</span></div>";
+  }).join("") + "</div>";
+}
+
+function renderSw(st){
+  var s = SW[st];
+  var steps = SWSTEPS.map(function(x, i){
+    var cls = "st" + (x.star ? " star" : "");
+    if(i === s.act) cls += " act";
+    else if(i < s.act) cls += " on";
+    return "<div class='" + cls + "'><div class='n'>" + x.n + "</div><div>" + esc(x.t) + "</div></div>";
+  }).join("");
+
+  $("body").innerHTML =
+    "<div class='cols3' style='margin-bottom:14px'>" +
+      "<div class='box" + (s.sp === "a" ? " hot" : "") + "'><h3>行程 A 的核心堆疊</h3>" +
+        "<div class='sp " + (s.sp === "a" ? "" : "off") + "'><span class='tag'>SP</span> 堆疊指標指這裡</div>" +
+        stkHtml(s.aStk, "a") +
+        "<h3 style='margin-top:14px'>A 的行程結構</h3>" + procHtml(s.aProc, "a") +
+      "</div>" +
+      "<div class='box'><h3>switch(A → B) 做什麼</h3><div class='steps'>" + steps + "</div>" +
+        "<div style='margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.6;'>" +
+        "進來時站在 A 的堆疊<br>出去時站在 B 的堆疊</div>" +
+      "</div>" +
+      "<div class='box" + (s.sp === "b" ? " hot" : "") + "'><h3>行程 B 的核心堆疊</h3>" +
+        "<div class='sp " + (s.sp === "b" ? "" : "off") + "'><span class='tag'>SP</span> 堆疊指標指這裡</div>" +
+        stkHtml(s.bStk, "b") +
+        "<h3 style='margin-top:14px'>B 的行程結構</h3>" + procHtml(s.bProc, "b") +
+      "</div>" +
+    "</div>";
+  $("msg").className = "msg" + (s.key ? " key" : "");
+  $("msg").innerHTML = s.msg;
+  $("extra").innerHTML = "";
+}
+
+/* ==================== 分頁 3：暫存器存了兩次 ==================== */
+var TWO = [
+  { hl:-1, msg:"暫存器其實存了<b>兩次</b>，而且是不同的人、存不同的東西、存到不同的地方。這裡是學生最常卡住的地方，慢慢看。" },
+  { hl:0,  msg:"<b>第一次：時鐘中斷發生時。</b>是<b>硬體</b>自動做的（隱式），存的是<b>被中斷行程的使用者暫存器</b>，存到<b>該行程的核心堆疊</b>上。這時 OS 的程式碼都還沒開始跑。" },
+  { hl:1,  msg:"<b>第二次：OS 決定換人、呼叫 switch() 時。</b>是<b>核心的程式碼</b>自己做的（顯式），存的是<b>核心暫存器</b>，存到<b>該行程的行程結構</b>裡。" },
+  { hl:2,  msg:"為什麼要兩次？因為這是<b>兩段不同的旅程</b>：一段是「使用者 → 核心」（硬體負責，用堆疊），一段是「核心 A → 核心 B」（軟體負責，用行程結構）。<br>兩段合起來，系統看起來就像「剛剛從 A 陷入核心，又要往 B 返回使用者」——交棒才會乾淨。" }
+];
+function renderTwo(st){
+  var hl = TWO[st].hl;
+  function card(i, title, who, what, where, color){
+    return "<div class='box" + (hl === i ? " hot" : "") + "' style='" + (hl >= 0 && hl !== i && i < 2 ? "opacity:.45;" : "") + "'>" +
+      "<h3 style='color:" + color + "'>" + title + "</h3>" +
+      "<table class='cmp'><tr><th style='width:28%'>誰做的</th><td>" + who + "</td></tr>" +
+      "<tr><th>存什麼</th><td>" + what + "</td></tr>" +
+      "<tr><th>存到哪</th><td>" + where + "</td></tr></table></div>";
+  }
+  $("body").innerHTML =
+    "<div class='cols'>" +
+      card(0, "① 時鐘中斷發生時", "<b style='color:var(--amber)'>硬體</b>（隱式，自動）",
+           "被中斷行程的<b>使用者</b>暫存器", "該行程的<b>核心堆疊</b>", "var(--amber)") +
+      card(1, "② 呼叫 switch() 時", "<b style='color:var(--cyan)'>核心的程式碼</b>（顯式，軟體）",
+           "<b>核心</b>暫存器", "該行程的<b>行程結構</b> (proc)", "var(--cyan)") +
+    "</div>" +
+    (hl === 2 ? "<div class='box hot' style='margin-top:14px'><h3>兩段旅程接起來</h3>" +
+      "<div style='font-size:13.5px;line-height:1.75'>" +
+      "<span style='color:var(--amber)'>使用者 A</span> —（硬體存使用者暫存器到核心堆疊）→ <span style='color:var(--amber)'>核心 A</span>" +
+      " —（軟體存核心暫存器到 proc）→ <span style='color:var(--cyan)'>核心 B</span>" +
+      " —（硬體還原使用者暫存器）→ <span style='color:var(--green)'>使用者 B</span></div></div>" : "");
+  $("msg").className = "msg";
+  $("msg").innerHTML = TWO[st].msg;
+  $("extra").innerHTML = "";
+}
+
+/* ==================== 分頁 4：協作 vs 非協作 ==================== */
+var coop = false;
+function renderCoop(){
+  var data = coop
+    ? { title:"協作式：迴圈裡呼叫 usleep(1)", p:[15622, 5], c:[15625, 6],
+        note:"程式每一圈都主動去睡，等於自己交出 CPU。所以幾乎全是「自願」。",
+        real:"[R2] usleep(1) each loop" }
+    : { title:"非協作式：迴圈裡完全不做系統呼叫", p:[0, 2951], c:[0, 3045],
+        note:"程式從頭到尾沒發過任何系統呼叫，照理說 OS 沒機會插手——但它還是被切走了幾千次。那就是<b>時鐘中斷</b>在工作。",
+        real:"[R1] no syscalls in the loop" };
+
+  $("body").innerHTML =
+    "<div class='cols'>" +
+      "<div class='box'><h3>" + data.title + "</h3>" +
+        "<table class='cmp'>" +
+        "<tr><th>行程</th><th>自願交出</th><th>被強迫切走</th></tr>" +
+        "<tr><td>父行程</td><td class='n " + (data.p[0] > data.p[1] ? "lo" : "") + "'>" + data.p[0] +
+          "</td><td class='n " + (data.p[1] > data.p[0] ? "hi" : "") + "'>" + data.p[1] + "</td></tr>" +
+        "<tr><td>子行程</td><td class='n " + (data.c[0] > data.c[1] ? "lo" : "") + "'>" + data.c[0] +
+          "</td><td class='n " + (data.c[1] > data.c[0] ? "hi" : "") + "'>" + data.c[1] + "</td></tr>" +
+        "</table>" +
+        "<div style='margin-top:12px;font-size:13px;line-height:1.6;color:var(--mute)'>" + data.note + "</div>" +
+      "</div>" +
+      "<div class='box'><h3>這些數字哪裡來的</h3>" +
+        "<div class='term' style='min-height:96px'>$ ./preempt\n<span class='os'>" + esc(data.real) + "</span>\n" +
+        "  parent  " + data.p[0] + " / " + data.p[1] + "\n  child   " + data.c[0] + " / " + data.c[1] + "</div>" +
+        "<div style='margin-top:12px;font-size:12.5px;line-height:1.6;color:var(--mute)'>" +
+        "兩個行程綁在同一顆 CPU 上各空轉 2 秒，再從 <code>/proc/self/status</code> 讀出：<br>" +
+        "<code>voluntary_ctxt_switches</code>（自願）<br><code>nonvoluntary_ctxt_switches</code>（被強迫）<br><br>" +
+        "課程檔案：<code>code/W3/preempt.c</code>，可以自己跑跑看。<br>" +
+        "<span style='color:var(--dim)'>（實際數字每台機器、每次執行都不一樣，看的是數量級。）</span></div>" +
+      "</div>" +
+    "</div>";
+  $("msg").className = "msg" + (coop ? "" : " key");
+  $("msg").innerHTML = coop
+    ? "協作式要能運作，得<b>假設每個程式都乖乖配合</b>。但只要有一支寫了 <code>while(1);</code> 又不發系統呼叫，整台機器就卡死了——這就是為什麼不能只靠協作。"
+    : "這是整章最有說服力的一個數字：程式<b>什麼系統呼叫都沒發</b>，卻還是被切走了幾千次。OS 靠的不是程式的配合，而是<b>時鐘中斷這個硬體機制</b>。";
+  $("extra").innerHTML =
+    "<span class='seg'><button data-cp='0' aria-pressed='" + (!coop) + "'>非協作（不發系統呼叫）</button>" +
+    "<button data-cp='1' aria-pressed='" + coop + "'>協作（主動 usleep）</button></span>";
+  Array.prototype.forEach.call($("extra").querySelectorAll("[data-cp]"), function(b){
+    b.addEventListener("click", function(){ coop = b.getAttribute("data-cp") === "1"; render(); });
+  });
+}
+
+/* ==================== 分頁架構 ==================== */
+var TABS = [
+  { name:"① 圖 6.3 全景", ttl:"從行程 A 換到行程 B：一次時鐘中斷", note:"OSTEP §6.4",
+    len:function(){ return PAN.length; }, render:renderPan, stepped:true },
+  { name:"② switch() 換堆疊", ttl:"最關鍵的一步：把堆疊指標換成 B 的", note:"OSTEP §6.4 · 圖 6.4",
+    len:function(){ return SW.length; }, render:renderSw, stepped:true },
+  { name:"③ 暫存器存了兩次", ttl:"硬體存一次，軟體再存一次", note:"OSTEP §6.4",
+    len:function(){ return TWO.length; }, render:renderTwo, stepped:true },
+  { name:"④ 協作 vs 非協作", ttl:"實測：不發系統呼叫，還是被切走幾千次", note:"code/W3/preempt.c",
+    len:function(){ return 1; }, render:renderCoop, stepped:false }
+];
+var tab = 0, step = 0;
+
+function render(){
+  var T = TABS[tab];
+  $("ttl").textContent = T.ttl;
+  $("note").textContent = T.note;
+  T.render(step);
+  var n = T.len();
+  $("prev").disabled = !T.stepped || step === 0;
+  $("next").disabled = !T.stepped || step >= n - 1;
+  $("prev").style.display = $("next").style.display = T.stepped ? "" : "none";
+  $("reset").style.display = T.stepped ? "" : "none";
+  $("dots").innerHTML = T.stepped
+    ? Array.apply(null, Array(n)).map(function(_, i){ return "<i class='" + (i === step ? "on" : "") + "' data-d='" + i + "'></i>"; }).join("")
+    : "";
+  Array.prototype.forEach.call($("dots").querySelectorAll("[data-d]"), function(d){
+    d.addEventListener("click", function(){ step = +d.getAttribute("data-d"); render(); });
+  });
+  Array.prototype.forEach.call($("tabs").children, function(b, i){
+    b.setAttribute("aria-selected", i === tab ? "true" : "false");
+  });
+}
+$("tabs").innerHTML = TABS.map(function(t){ return "<button role='tab'>" + t.name + "</button>"; }).join("");
+Array.prototype.forEach.call($("tabs").children, function(b, i){
+  b.addEventListener("click", function(){ tab = i; step = 0; render(); });
+});
+$("prev").addEventListener("click", function(){ if(step > 0){ step--; render(); } });
+$("next").addEventListener("click", function(){ if(step < TABS[tab].len() - 1){ step++; render(); } });
+$("reset").addEventListener("click", function(){ step = 0; render(); });
+document.addEventListener("keydown", function(e){
+  if(e.key === "ArrowLeft"){ if(step > 0){ step--; render(); } }
+  else if(e.key === "ArrowRight"){ if(step < TABS[tab].len() - 1){ step++; render(); } }
+  else if(e.key === "r" || e.key === "R"){ step = 0; render(); }
+});
+render();
+</script>
+</body>
+</html>

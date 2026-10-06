@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>排程模擬器 FIFO / SJF / STCF / RR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --navy:#0E1B2E; --navy2:#132741; --panel:#183253; --panel2:#1d3c61;
+    --line:#284a70; --line2:#33587f;
+    --ink:#EAF1F8; --mute:#9FB6CF; --dim:#6f89a4;
+    --blue:#4A93D6; --cyan:#2DC7D8; --amber:#F2B84B; --green:#54C878; --red:#EA6B5E; --violet:#9B8CE8;
+    --mono:"IBM Plex Mono","Consolas",monospace;
+    --sans:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; min-height:100vh; color:var(--ink); font-family:var(--sans);
+    background:radial-gradient(1200px 700px at 50% -10%, #17304f 0%, rgba(23,48,79,0) 60%), var(--navy);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1240px; margin:0 auto; padding:clamp(16px,3vw,30px) clamp(14px,3vw,26px) 28px;
+    display:flex; flex-direction:column; gap:clamp(10px,1.8vh,16px);}
+
+  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--cyan); display:flex; align-items:center; gap:10px;}
+  .eyebrow::before{content:""; width:26px; height:2px; background:var(--cyan);}
+  h1{margin:4px 0 2px; font-weight:900; font-size:clamp(23px,3.6vw,34px); line-height:1.15;}
+  h1 span{color:var(--cyan);}
+  .sub{color:var(--mute); font-size:14px; line-height:1.6; margin:0;}
+
+  .stage{background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.45));
+    border:1px solid var(--line); border-radius:16px; padding:clamp(14px,2.4vw,24px);}
+
+  .layout{display:grid; gap:16px; grid-template-columns:330px 1fr;}
+  @media(max-width:960px){.layout{grid-template-columns:1fr;}}
+
+  .box{background:var(--navy); border:1px solid var(--line); border-radius:12px; padding:14px 16px;}
+  .box h3{margin:0 0 11px; font-size:13px; letter-spacing:.06em; color:var(--mute); font-weight:700;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;}
+
+  /* job editor */
+  .jobs{display:flex; flex-direction:column; gap:7px;}
+  .jhead,.jrow{display:grid; grid-template-columns:34px 1fr 1fr 30px; gap:8px; align-items:center;}
+  .jhead{font-size:11px; color:var(--dim); font-family:var(--mono); padding:0 2px;}
+  .jrow .sw{width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:12px; color:#02121f;}
+  .jrow input{width:100%; background:var(--navy2); border:1px solid var(--line); border-radius:7px;
+    color:var(--ink); font-family:var(--mono); font-size:13px; padding:7px 9px; text-align:center;}
+  .jrow input:focus{outline:none; border-color:var(--cyan);}
+  .jrow .del{background:none; border:0; color:var(--dim); cursor:pointer; font-size:16px; padding:0; line-height:1;}
+  .jrow .del:hover{color:var(--red);}
+
+  button{font-family:var(--sans); cursor:pointer;}
+  .btn{font-size:12.5px; font-weight:700; color:var(--ink); background:var(--panel);
+    border:1px solid var(--line2); border-radius:8px; padding:7px 13px; transition:.16s;}
+  .btn:hover{background:var(--panel2); border-color:var(--cyan);}
+  .btn.sm{font-size:11.5px; padding:5px 10px;}
+
+  .seg{display:flex; flex-wrap:wrap; gap:6px;}
+  .seg button{font-size:12.5px; font-weight:700; background:var(--navy2); color:var(--mute);
+    border:1px solid var(--line); border-radius:8px; padding:7px 13px; transition:.16s;}
+  .seg button:hover{color:var(--ink);}
+  .seg button[aria-pressed="true"]{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+
+  .presets{display:flex; flex-wrap:wrap; gap:6px;}
+  .presets button{font-size:11.5px; font-family:var(--mono); background:var(--navy2); color:var(--mute);
+    border:1px solid var(--line); border-radius:7px; padding:5px 9px;}
+  .presets button:hover{color:var(--cyan); border-color:var(--cyan);}
+
+  .slice{display:flex; align-items:center; gap:9px; font-size:12.5px; color:var(--mute); margin-top:10px;}
+  .slice input{width:62px; background:var(--navy2); border:1px solid var(--line); border-radius:7px;
+    color:var(--ink); font-family:var(--mono); font-size:13px; padding:6px 8px; text-align:center;}
+
+  /* gantt */
+  .gwrap{overflow-x:auto; padding-bottom:4px;}
+  .gantt{position:relative; height:52px; min-width:100%;}
+  .seg2{position:absolute; top:0; height:38px; border-radius:5px; display:flex; align-items:center;
+    justify-content:center; font-size:12px; font-weight:700; color:#02121f; border:1px solid rgba(0,0,0,.25);
+    overflow:hidden; white-space:nowrap;}
+  .seg2.idle{background:#1b2c42; color:var(--dim); border-color:var(--line);}
+  .axis{position:relative; height:18px; min-width:100%;}
+  .tick{position:absolute; font-family:var(--mono); font-size:10.5px; color:var(--dim); transform:translateX(-50%);}
+
+  table.r{width:100%; border-collapse:collapse; font-size:13px; margin-top:4px;}
+  table.r th,table.r td{border:1px solid var(--line); padding:8px 10px; text-align:center;}
+  table.r th{background:var(--panel); color:var(--mute); font-size:11.5px; font-weight:700;}
+  table.r td.j{font-weight:700;} table.r td{font-family:var(--mono);}
+  table.r tr.avg td{background:rgba(45,199,216,.09); font-weight:700; color:var(--cyan);}
+
+  .cmpgrid{display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(250px,1fr));}
+  .cmpcard{border:1px solid var(--line); border-radius:11px; padding:12px 14px; background:var(--navy);}
+  .cmpcard h4{margin:0 0 9px; font-size:14px; font-weight:700;}
+  .cmpcard .nums{display:flex; gap:18px; font-family:var(--mono); font-size:12.5px;}
+  .cmpcard .nums div span{display:block; font-size:10.5px; color:var(--dim); font-family:var(--sans); margin-bottom:2px;}
+  .best{color:var(--green);} .worst{color:var(--red);}
+
+  .msg{margin-top:14px; border-left:3px solid var(--cyan); background:rgba(45,199,216,.07);
+    padding:11px 14px; border-radius:0 9px 9px 0; font-size:13.5px; line-height:1.65;}
+  .msg b{color:var(--cyan);}
+  footer{color:var(--dim); font-family:var(--mono); font-size:11.5px; line-height:1.7; margin-top:6px;}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">OSTEP 第 7 章 · 第 3 週</div>
+  <h1><span>排程模擬器</span>　FIFO / SJF / STCF / RR</h1>
+  <p class="sub">自己改工作的到達時間和長度，看四種排程怎麼排、週轉時間和響應時間怎麼變。課本圖 7.1–7.7 都可以一鍵載入。</p>
+
+  <div class="stage">
+    <div class="layout">
+      <div>
+        <div class="box" style="margin-bottom:14px">
+          <h3>工作<button class="btn sm" id="add">＋ 加一個</button></h3>
+          <div class="jhead"><div></div><div>到達</div><div>長度</div><div></div></div>
+          <div class="jobs" id="jobs"></div>
+        </div>
+        <div class="box" style="margin-bottom:14px">
+          <h3>排程策略</h3>
+          <div class="seg" id="pol"></div>
+          <div class="slice" id="sliceBox">
+            <span>時間片</span><input id="slice" type="number" min="1" max="20" value="1">
+            <span style="color:var(--dim);font-size:11.5px">（只有 RR 會用到）</span>
+          </div>
+        </div>
+        <div class="box">
+          <h3>課本的例子</h3>
+          <div class="presets" id="presets"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="box" style="margin-bottom:14px">
+          <h3 id="gtitle">排程結果</h3>
+          <div class="gwrap"><div class="gantt" id="gantt"></div><div class="axis" id="axis"></div></div>
+          <table class="r" id="res"></table>
+        </div>
+        <div class="box">
+          <h3>四種策略，同一組工作</h3>
+          <div class="cmpgrid" id="cmp"></div>
+        </div>
+      </div>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <footer>
+    對應課程檔案 <code>code/W3/sched.c</code>，同樣的演算法<br>
+    樹德科技大學 資訊工程系　·　作業系統　·　教材：OSTEP 第 7 章
+  </footer>
+</div>
+
+<script>
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var COLORS = ["#4A93D6", "#2DC7D8", "#F2B84B", "#54C878", "#9B8CE8", "#EA6B5E"];
+var POLICIES = [
+  { id:"FIFO", name:"FIFO", full:"先進先出" },
+  { id:"SJF",  name:"SJF",  full:"最短工作優先" },
+  { id:"STCF", name:"STCF", full:"最短完成時間優先（可搶佔）" },
+  { id:"RR",   name:"RR",   full:"輪轉" }
+];
+var PRESETS = [
+  { n:"圖 7.1", jobs:[["A",0,10],["B",0,10],["C",0,10]], pol:"FIFO", q:1,
+    note:"三個一樣長、同時到達。FIFO 表現得不錯，平均週轉 20。" },
+  { n:"圖 7.2", jobs:[["A",0,100],["B",0,10],["C",0,10]], pol:"FIFO", q:1,
+    note:"把 A 變成 100。<b>護航效應</b>：B、C 被卡在 A 後面，平均週轉飆到 110。" },
+  { n:"圖 7.3", jobs:[["A",0,100],["B",0,10],["C",0,10]], pol:"SJF", q:1,
+    note:"同一組工作改用 SJF，先跑短的。平均週轉從 110 降到 50。" },
+  { n:"圖 7.4", jobs:[["A",0,100],["B",10,10],["C",10,10]], pol:"SJF", q:1,
+    note:"B、C 改成 t=10 才到。SJF 不能搶佔，A 已經開跑就得跑完 → 護航又回來了，103.33。" },
+  { n:"圖 7.5", jobs:[["A",0,100],["B",10,10],["C",10,10]], pol:"STCF", q:1,
+    note:"同樣的工作改用 STCF（可搶佔）。B、C 一到就把 A 搶下來，週轉回到最優 50。" },
+  { n:"圖 7.6", jobs:[["A",0,5],["B",0,5],["C",0,5]], pol:"SJF", q:1,
+    note:"三個各 5。SJF 的響應時間是 5——第三個工作要等前兩個全跑完才第一次執行。" },
+  { n:"圖 7.7", jobs:[["A",0,5],["B",0,5],["C",0,5]], pol:"RR", q:1,
+    note:"同樣的工作改用 RR，時間片 1。響應從 5 降到 1，但<b>週轉從 10 變成 14</b>——這就是取捨。" }
+];
+
+var jobs = [{n:"A",a:0,l:10},{n:"B",a:0,l:10},{n:"C",a:0,l:10}];
+var policy = "FIFO", slice = 1, note = PRESETS[0].note;
+
+/* ---------- 排程核心（和 code/W3/sched.c 同一套邏輯） ---------- */
+function simulate(js, pol, q){
+  var n = js.length;
+  if(!n) return { segs:[], rows:[], tt:0, rt:0, end:0 };
+  var left = js.map(function(j){ return j.l; });
+  var first = js.map(function(){ return -1; });
+  var done  = js.map(function(){ return -1; });
+  var queue = [], inq = js.map(function(){ return false; });
+  var segs = [], t = 0, cur = -1, used = 0, fin = 0, segStart = 0, segJob = -2;
+  var guard = 0, LIMIT = 100000;
+
+  while(fin < n && guard++ < LIMIT){
+    for(var i = 0; i < n; i++)
+      if(js[i].a === t && !inq[i]){ queue.push(i); inq[i] = true; }
+
+    var pick = -1;
+    if(pol === "FIFO" || pol === "SJF"){
+      if(cur >= 0 && left[cur] > 0) pick = cur;              // 不搶佔
+      else for(var k = 0; k < n; k++){
+        if(js[k].a > t || left[k] === 0) continue;
+        if(pick < 0){ pick = k; continue; }
+        if(pol === "FIFO" && js[k].a < js[pick].a) pick = k;
+        if(pol === "SJF"  && js[k].l < js[pick].l) pick = k;
+      }
+    } else if(pol === "STCF"){
+      for(var m = 0; m < n; m++){
+        if(js[m].a > t || left[m] === 0) continue;
+        if(pick < 0 || left[m] < left[pick]) pick = m;
+      }
+    } else {                                                  // RR
+      if(cur >= 0 && left[cur] > 0 && used < q) pick = cur;
+      else{
+        if(cur >= 0 && left[cur] > 0) queue.push(cur);
+        while(queue.length && left[queue[0]] === 0) queue.shift();
+        pick = queue.length ? queue.shift() : -1;
+        used = 0;
+      }
+    }
+
+    if(pick !== segJob){
+      if(segJob !== -2) segs.push({ j:segJob, s:segStart, e:t });
+      segStart = t; segJob = pick;
+    }
+    if(pick >= 0){
+      if(first[pick] < 0) first[pick] = t;
+      left[pick]--; used++;
+      if(left[pick] === 0){ done[pick] = t + 1; fin++; }
+    }
+    cur = pick; t++;
+  }
+  if(segJob !== -2) segs.push({ j:segJob, s:segStart, e:t });
+
+  var rows = js.map(function(j, i){
+    return { n:j.n, a:j.a, l:j.l, done:done[i], first:first[i],
+             turn:done[i] - j.a, resp:first[i] - j.a };
+  });
+  var tt = rows.reduce(function(s2, r){ return s2 + r.turn; }, 0) / n;
+  var rt = rows.reduce(function(s2, r){ return s2 + r.resp; }, 0) / n;
+  return { segs:segs, rows:rows, tt:tt, rt:rt, end:t };
+}
+
+/* ---------- 畫面 ---------- */
+function drawJobs(){
+  $("jobs").innerHTML = jobs.map(function(j, i){
+    return "<div class='jrow'>" +
+      "<div class='sw' style='background:" + COLORS[i % COLORS.length] + "'>" + j.n + "</div>" +
+      "<input type='number' min='0' max='400' value='" + j.a + "' data-f='a' data-i='" + i + "'>" +
+      "<input type='number' min='1' max='400' value='" + j.l + "' data-f='l' data-i='" + i + "'>" +
+      "<button class='del' data-del='" + i + "' title='刪除'>×</button></div>";
+  }).join("");
+  Array.prototype.forEach.call($("jobs").querySelectorAll("input"), function(inp){
+    inp.addEventListener("input", function(){
+      var i = +inp.getAttribute("data-i"), f = inp.getAttribute("data-f");
+      var v = parseInt(inp.value, 10);
+      if(isNaN(v)) return;
+      if(f === "l" && v < 1) v = 1;
+      if(f === "a" && v < 0) v = 0;
+      jobs[i][f] = v; draw();
+    });
+  });
+  Array.prototype.forEach.call($("jobs").querySelectorAll("[data-del]"), function(b){
+    b.addEventListener("click", function(){
+      if(jobs.length <= 1) return;
+      jobs.splice(+b.getAttribute("data-del"), 1);
+      jobs.forEach(function(j, k){ j.n = String.fromCharCode(65 + k); });
+      drawJobs(); draw();
+    });
+  });
+}
+
+function draw(){
+  var r = simulate(jobs, policy, slice);
+  var total = Math.max(r.end, 1);
+
+  $("gtitle").innerHTML = "排程結果　<span style='color:var(--cyan);font-family:var(--mono)'>" + policy +
+    (policy === "RR" ? "（時間片 " + slice + "）" : "") + "</span>";
+
+  $("gantt").innerHTML = r.segs.map(function(s){
+    var L = (s.s / total * 100), W = ((s.e - s.s) / total * 100);
+    if(s.j < 0) return "<div class='seg2 idle' style='left:" + L + "%;width:" + W + "%'>閒置</div>";
+    var lbl = jobs[s.j] ? jobs[s.j].n : "?";
+    return "<div class='seg2' style='left:" + L + "%;width:" + W + "%;background:" +
+           COLORS[s.j % COLORS.length] + "'>" + (W > 3 ? lbl : "") + "</div>";
+  }).join("");
+
+  var marks = [0], seen = {0:1};
+  r.segs.forEach(function(s){ if(!seen[s.e]){ marks.push(s.e); seen[s.e] = 1; } });
+  if(marks.length > 12){
+    var stepv = Math.ceil(total / 10);
+    marks = [];
+    for(var v = 0; v <= total; v += stepv) marks.push(v);
+    if(marks[marks.length - 1] !== total) marks.push(total);
+  }
+  $("axis").innerHTML = marks.map(function(m){
+    // 頭尾的刻度靠邊對齊，否則置中會被容器切掉一半
+    var tx = m === 0 ? "translateX(0)" : (m === total ? "translateX(-100%)" : "translateX(-50%)");
+    return "<div class='tick' style='left:" + (m / total * 100) + "%;transform:" + tx + "'>" + m + "</div>";
+  }).join("");
+
+  $("res").innerHTML =
+    "<tr><th>工作</th><th>到達</th><th>長度</th><th>完成</th><th>週轉</th><th>首次執行</th><th>響應</th></tr>" +
+    r.rows.map(function(x, i){
+      return "<tr><td class='j' style='color:" + COLORS[i % COLORS.length] + "'>" + x.n + "</td>" +
+        "<td>" + x.a + "</td><td>" + x.l + "</td><td>" + x.done + "</td><td>" + x.turn + "</td>" +
+        "<td>" + x.first + "</td><td>" + x.resp + "</td></tr>";
+    }).join("") +
+    "<tr class='avg'><td colspan='4'>平均</td><td>" + r.tt.toFixed(2) + "</td><td>—</td><td>" + r.rt.toFixed(2) + "</td></tr>";
+
+  // 四種策略比較
+  var all = POLICIES.map(function(p){
+    var s2 = simulate(jobs, p.id, slice);
+    return { p:p, tt:s2.tt, rt:s2.rt };
+  });
+  var tts = all.map(function(x){ return x.tt; }), rts = all.map(function(x){ return x.rt; });
+  var minT = Math.min.apply(null, tts), maxT = Math.max.apply(null, tts);
+  var minR = Math.min.apply(null, rts), maxR = Math.max.apply(null, rts);
+  $("cmp").innerHTML = all.map(function(x){
+    var tc = (x.tt === minT && minT !== maxT) ? "best" : ((x.tt === maxT && minT !== maxT) ? "worst" : "");
+    var rc = (x.rt === minR && minR !== maxR) ? "best" : ((x.rt === maxR && minR !== maxR) ? "worst" : "");
+    return "<div class='cmpcard' style='" + (x.p.id === policy ? "border-color:var(--cyan)" : "") + "'>" +
+      "<h4 style='color:" + (x.p.id === policy ? "var(--cyan)" : "var(--ink)") + "'>" + x.p.name +
+      "<span style='font-weight:400;font-size:11.5px;color:var(--dim)'>　" + x.p.full + "</span></h4>" +
+      "<div class='nums'><div><span>平均週轉</span><b class='" + tc + "'>" + x.tt.toFixed(2) + "</b></div>" +
+      "<div><span>平均響應</span><b class='" + rc + "'>" + x.rt.toFixed(2) + "</b></div></div></div>";
+  }).join("");
+
+  $("sliceBox").style.opacity = policy === "RR" ? "1" : ".4";
+  $("msg").innerHTML = note;
+}
+
+/* ---------- 控制項 ---------- */
+$("pol").innerHTML = POLICIES.map(function(p){
+  return "<button data-p='" + p.id + "'>" + p.name + "</button>";
+}).join("");
+function syncPol(){
+  Array.prototype.forEach.call($("pol").children, function(b){
+    b.setAttribute("aria-pressed", b.getAttribute("data-p") === policy ? "true" : "false");
+  });
+}
+Array.prototype.forEach.call($("pol").children, function(b){
+  b.addEventListener("click", function(){
+    policy = b.getAttribute("data-p"); syncPol();
+    note = "換成 <b>" + policy + "</b>。看右下角四張卡片：綠色是這組工作裡最好的，紅色是最差的。" +
+           "<b>沒有哪一種能同時把週轉和響應都拿到最好</b>——這就是第 7 章的核心結論。";
+    draw();
+  });
+});
+$("slice").addEventListener("input", function(){
+  var v = parseInt($("slice").value, 10);
+  if(!isNaN(v) && v >= 1){ slice = v;
+    note = "時間片改成 <b>" + v + "</b>。時間片越小響應越好，但切換次數變多、成本變高；" +
+           "越大就越接近 FIFO。試著在 RR 下把它從 1 慢慢調大，看兩個數字怎麼互換。";
+    draw(); }
+});
+$("add").addEventListener("click", function(){
+  if(jobs.length >= 6) return;
+  jobs.push({ n:String.fromCharCode(65 + jobs.length), a:0, l:10 });
+  drawJobs(); draw();
+});
+$("presets").innerHTML = PRESETS.map(function(p, i){
+  return "<button data-ps='" + i + "'>" + p.n + "</button>";
+}).join("");
+Array.prototype.forEach.call($("presets").children, function(b){
+  b.addEventListener("click", function(){
+    var p = PRESETS[+b.getAttribute("data-ps")];
+    jobs = p.jobs.map(function(j){ return { n:j[0], a:j[1], l:j[2] }; });
+    policy = p.pol; slice = p.q; $("slice").value = p.q; note = "<b>" + p.n + "</b>　" + p.note;
+    syncPol(); drawJobs(); draw();
+  });
+});
+
+syncPol(); drawJobs(); draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Timer Interrupt and Context Switch, step by step</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --navy:#0E1B2E; --navy2:#132741; --panel:#183253; --panel2:#1d3c61;
+    --line:#284a70; --line2:#33587f;
+    --ink:#EAF1F8; --mute:#9FB6CF; --dim:#6f89a4;
+    --blue:#4A93D6; --cyan:#2DC7D8; --amber:#F2B84B; --green:#54C878; --red:#EA6B5E;
+    --mono:"IBM Plex Mono","Consolas",monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; min-height:100vh; color:var(--ink); font-family:var(--sans);
+    background:radial-gradient(1200px 700px at 50% -10%, #17304f 0%, rgba(23,48,79,0) 60%), var(--navy);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1240px; margin:0 auto; padding:clamp(16px,3vw,30px) clamp(14px,3vw,26px) 28px;
+    display:flex; flex-direction:column; gap:clamp(10px,1.8vh,16px);}
+  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--cyan); display:flex; align-items:center; gap:10px;}
+  .eyebrow::before{content:""; width:26px; height:2px; background:var(--cyan);}
+  h1{margin:4px 0 2px; font-weight:900; font-size:clamp(23px,3.6vw,34px); line-height:1.15;}
+  h1 span{color:var(--cyan);}
+  .sub{color:var(--mute); font-size:14px; line-height:1.6; margin:0;}
+  .tabs{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;}
+  .tabs button{font-family:var(--sans); font-size:13.5px; font-weight:700; color:var(--mute);
+    background:var(--navy2); border:1px solid var(--line); border-radius:999px; padding:8px 16px; cursor:pointer; transition:.18s;}
+  .tabs button:hover{color:var(--ink); border-color:var(--line2);}
+  .tabs button[aria-selected="true"]{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+  .stage{background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.45));
+    border:1px solid var(--line); border-radius:16px; padding:clamp(14px,2.4vw,24px);}
+  .stagehead{display:flex; justify-content:space-between; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:14px;}
+  .stagehead h2{margin:0; font-size:clamp(17px,2.4vw,21px); font-weight:700;}
+  .stagehead .note{font-size:12.5px; color:var(--dim); font-family:var(--mono);}
+  .cols{display:grid; gap:14px; grid-template-columns:1fr 1fr;}
+  .cols3{display:grid; gap:12px; grid-template-columns:1fr 1fr 1fr;}
+  @media(max-width:900px){.cols,.cols3{grid-template-columns:1fr;}}
+  .box{background:var(--navy); border:1px solid var(--line); border-radius:12px; padding:14px 16px;}
+  .box h3{margin:0 0 10px; font-size:13px; letter-spacing:.04em; color:var(--mute); font-weight:700;}
+  .box.hot{border-color:var(--cyan); box-shadow:0 0 0 1px rgba(45,199,216,.3);}
+  .stk{display:flex; flex-direction:column-reverse; gap:4px; min-height:172px; justify-content:flex-start;}
+  .cell{border:1px solid var(--line); border-radius:7px; padding:7px 10px; font-family:var(--mono);
+    font-size:11.5px; color:var(--mute); background:var(--navy2); transition:.35s;}
+  .cell.filled{color:var(--blue); border-color:var(--blue); background:rgba(74,147,214,.13);}
+  .cell.filled.b{color:var(--green); border-color:var(--green); background:rgba(84,200,120,.13);}
+  .cell.empty{opacity:.3; border-style:dashed;}
+  .sp{display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:12px;
+    font-weight:600; color:var(--amber); margin-bottom:9px; transition:.35s;}
+  .sp .tag{background:var(--amber); color:#2a1d00; border-radius:5px; padding:2px 8px;}
+  .sp.off{opacity:.18;}
+  .proc{display:flex; flex-direction:column; gap:5px;}
+  .preg{display:flex; justify-content:space-between; border:1px solid var(--line); border-radius:7px;
+    padding:6px 10px; font-family:var(--mono); font-size:11.5px; color:var(--dim); transition:.35s;}
+  .preg.set{color:var(--ink); border-color:var(--line2); background:var(--panel);}
+  .preg.set.hl{border-color:var(--cyan); background:rgba(45,199,216,.14); color:var(--cyan);}
+  .steps{display:flex; flex-direction:column; gap:7px;}
+  .st{display:grid; grid-template-columns:28px 1fr; gap:10px; align-items:center;
+    border:1px solid var(--line); border-radius:9px; padding:10px 12px; opacity:.35; transition:.3s; font-size:12.5px; line-height:1.45;}
+  .st .n{width:28px; height:28px; border-radius:50%; background:var(--panel); color:var(--mute);
+    display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:12px; font-weight:600;}
+  .st.on{opacity:1;}
+  .st.act{opacity:1; border-color:var(--cyan); background:rgba(45,199,216,.12);}
+  .st.act .n{background:var(--cyan); color:#06202c;}
+  .st.star{border-color:var(--red);}
+  .st.star.act{background:rgba(234,107,94,.15); box-shadow:0 0 0 1px rgba(234,107,94,.4);}
+  .st.star.act .n{background:var(--red); color:#2a0b07;}
+  .lanes{position:relative; height:250px; margin:4px 0;}
+  .lane{position:absolute; left:104px; right:0; height:46px; border-radius:10px; border:1px solid var(--line);}
+  .lane.a{top:10px; background:rgba(74,147,214,.09);}
+  .lane.k{top:100px; background:rgba(242,184,75,.10);}
+  .lane.b{top:190px; background:rgba(84,200,120,.09);}
+  .lanelbl{position:absolute; left:0; width:96px; text-align:right; font-size:12px; font-weight:700; line-height:1.3;}
+  .lanelbl.a{top:18px; color:var(--blue);} .lanelbl.k{top:108px; color:var(--amber);} .lanelbl.b{top:198px; color:var(--green);}
+  .runner{position:absolute; height:24px; border-radius:6px; left:114px; width:120px;
+    font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    transition:all .55s cubic-bezier(.5,.05,.3,1); top:21px; background:var(--blue); color:#02121f;}
+  .runner.k{top:111px; background:var(--amber); color:#2a1d00;}
+  .runner.b{top:201px; background:var(--green); color:#04220f;}
+  .term{background:#08131f; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+    font-family:var(--mono); font-size:12px; line-height:1.65; color:#cfe3f5; min-height:120px; white-space:pre-wrap;}
+  .term .os{color:var(--amber);} .term .pg{color:var(--blue);} .term .b2{color:var(--green);}
+  .term .ok{color:var(--green);} .term .no{color:var(--red);}
+  .msg{margin-top:12px; border-left:3px solid var(--cyan); background:rgba(45,199,216,.07);
+    padding:11px 14px; border-radius:0 9px 9px 0; font-size:13.5px; line-height:1.6; min-height:62px;}
+  .msg.key{border-left-color:var(--red); background:rgba(234,107,94,.08);}
+  .msg b{color:var(--cyan);} .msg.key b{color:var(--red);}
+  .ctl{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px;}
+  .ctl button{font-family:var(--sans); font-size:13px; font-weight:700; color:var(--ink);
+    background:var(--panel); border:1px solid var(--line2); border-radius:9px; padding:8px 15px; cursor:pointer; transition:.16s;}
+  .ctl button:hover:not(:disabled){background:var(--panel2); border-color:var(--cyan);}
+  .ctl button:disabled{opacity:.35; cursor:default;}
+  .ctl .prim{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+  .dots{display:flex; gap:6px; margin-left:auto;}
+  .dots i{width:8px; height:8px; border-radius:50%; background:var(--line2); cursor:pointer; transition:.2s;}
+  .dots i.on{background:var(--cyan); transform:scale(1.25);}
+  .seg{display:inline-flex; border:1px solid var(--line2); border-radius:9px; overflow:hidden;}
+  .seg button{border:0; border-radius:0; background:var(--navy2); padding:7px 14px; font-size:12.5px;}
+  .seg button[aria-pressed="true"]{background:var(--amber); color:#2a1d00;}
+  table.cmp{width:100%; border-collapse:collapse; font-size:13px;}
+  table.cmp th,table.cmp td{border:1px solid var(--line); padding:9px 11px; text-align:left;}
+  table.cmp th{background:var(--panel); color:var(--mute); font-size:12px; font-weight:700;}
+  table.cmp td.n{font-family:var(--mono);}
+  table.cmp .hi{color:var(--red); font-weight:700;}
+  table.cmp .lo{color:var(--green); font-weight:700;}
+  footer{color:var(--dim); font-family:var(--mono); font-size:11.5px; line-height:1.7; margin-top:6px;}
+  .kbd{font-family:var(--mono); font-size:11px; background:var(--panel); border:1px solid var(--line2);
+    border-radius:5px; padding:1px 6px; color:var(--mute);}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">OSTEP Chapter 6 · Week 3</div>
+  <h1><span>Timer Interrupt</span> and Context Switch</h1>
+  <p class="sub">How does the OS take the CPU back from a running process and give it to another one? The key step is changing the stack pointer.</p>
+
+  <div class="tabs" id="tabs" role="tablist"></div>
+
+  <div class="stage">
+    <div class="stagehead">
+      <h2 id="ttl"></h2>
+      <div class="note" id="note"></div>
+    </div>
+    <div id="body"></div>
+    <div class="msg" id="msg"></div>
+    <div class="ctl">
+      <button id="prev">&larr; Back</button>
+      <button id="next" class="prim">Next &rarr;</button>
+      <button id="reset">Start over</button>
+      <span id="extra"></span>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+
+  <footer>
+    Keys: <span class="kbd">&larr;</span> <span class="kbd">&rarr;</span> step &nbsp;·&nbsp; <span class="kbd">R</span> start over<br>
+    Shu-Te University, Dept. of CSIE &nbsp;·&nbsp; Operating Systems &nbsp;·&nbsp; OSTEP Chapter 6
+  </footer>
+</div>
+
+<script>
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var esc = function(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+
+/* ============ Tab 1: the Figure 6.3 big picture ============ */
+var PAN = [
+  { pos:"a", x:114, w:160, lbl:"process A runs", term:"<span class='pg'>process A is running in user mode...</span>",
+    msg:"Process A is running in user mode. The OS is <b>not on the CPU</b>, so it cannot do anything on its own." },
+  { pos:"a", x:114, w:160, lbl:"process A runs", term:"<span class='pg'>process A running...</span>\n<span class='os'>timer: 10 ms are up</span>",
+    msg:"A timer goes off every few milliseconds. This comes from the <b>hardware</b>. Process A does not take part and <b>cannot say no</b>." },
+  { pos:"k", x:260, w:210, lbl:"kernel: interrupt handler", term:"<span class='no'>interrupt!</span>\n<span class='os'>hardware: save A's registers -&gt; A's kernel stack</span>\n<span class='os'>hardware: raise to kernel mode</span>\n<span class='os'>hardware: jump to the timer handler</span>",
+    msg:"The hardware pulls control into the kernel by force. This is how the OS gets the CPU back — <b>no help from the process is needed</b>." },
+  { pos:"k", x:260, w:210, lbl:"kernel: scheduler decides", term:"<span class='os'>[OS] scheduler: keep running A, or switch to B?</span>\n<span class='os'>[OS] switch to B -&gt; call switch(A-&gt;B)</span>",
+    msg:"The OS asks the scheduler: keep A, or run someone else? That is a <b>policy</b> question (Chapter 7). Here it picks B." },
+  { pos:"b", x:490, w:160, lbl:"process B runs", term:"<span class='ok'>return-from-trap</span>\n<span class='b2'>process B carries on from where it was stopped</span>",
+    msg:"<b>We went into the kernel as A, and came out as B.</b> How did that happen? The next tab opens up switch() and shows you." }
+];
+function renderPan(st){
+  var s = PAN[st];
+  $("body").innerHTML =
+    "<div class='box' style='margin-bottom:14px'><h3>Figure 6.3 &nbsp; one timer interrupt, one process change</h3>" +
+      "<div class='lanes'>" +
+        "<div class='lanelbl a'>process A<br>(user)</div><div class='lane a'></div>" +
+        "<div class='lanelbl k'>kernel mode<br>(OS)</div><div class='lane k'></div>" +
+        "<div class='lanelbl b'>process B<br>(user)</div><div class='lane b'></div>" +
+        "<div class='runner " + s.pos + "' style='left:" + s.x + "px;width:" + s.w + "px'>" + esc(s.lbl) + "</div>" +
+      "</div>" +
+      "<div style='font-family:var(--mono);font-size:11px;color:var(--dim);padding:0 4px;'>time &rarr;</div>" +
+    "</div>" +
+    "<div class='term'>" + s.term + "</div>";
+  $("msg").className = "msg" + (st === 4 ? " key" : "");
+  $("msg").innerHTML = s.msg;
+  $("extra").innerHTML = "";
+}
+
+/* ============ Tab 2: switch() changes the stack ============ */
+var SW = [
+  { sp:"a", aStk:["A's user registers"], bStk:["B's user registers"], aProc:[], bProc:["B's kernel registers"], act:-1,
+    msg:"The start. A has just been stopped by the timer, and the hardware has already saved <b>A's user registers</b> on A's kernel stack. The stack pointer SP points at A's kernel stack.<br>B was stopped earlier, and its kernel registers are saved in B's proc structure." },
+  { sp:"a", aStk:["A's user registers"], bStk:["B's user registers"], aProc:["A's kernel registers"], bProc:["B's kernel registers"], act:0,
+    msg:"<b>1. Save A's kernel registers</b> into A's proc structure. Note that <b>software</b> does this — the code of switch() moves them itself." },
+  { sp:"b", aStk:["A's user registers"], bStk:["B's user registers"], aProc:["A's kernel registers"], bProc:["B's kernel registers"], act:1, key:true,
+    msg:"<b>2. Point the stack pointer at B's kernel stack.</b><br>Watch the SP tag jump across. We went into switch() standing on A's stack; after this one line we stand on B's stack. <b>Control changes hands right here.</b> Everything before and after is just moving registers." },
+  { sp:"b", aStk:["A's user registers"], bStk:["B's user registers"], aProc:["A's kernel registers"], bProc:[], act:2,
+    msg:"<b>3. Restore B's kernel registers</b> from B's proc structure. Now the kernel state in the CPU belongs completely to B." },
+  { sp:"b", aStk:["A's user registers"], bStk:[], aProc:["A's kernel registers"], bProc:[], act:3,
+    msg:"Then <b>return-from-trap</b>. The user registers it puts back are on the kernel stack we are <b>standing on now</b> — and that is <b>B's</b>. So it restores B's state from the last time B was stopped, and B carries on from there.<br><br>A's things stay safe on A's stack and in A's proc structure until it is A's turn again." }
+];
+var SWSTEPS = [
+  { n:"1", t:"Save A's kernel registers -> A's proc structure" },
+  { n:"2", t:"Point the stack pointer at B's kernel stack", star:true },
+  { n:"3", t:"Restore B's kernel registers <- B's proc structure" },
+  { n:"4", t:"return-from-trap -> back to B in user mode" }
+];
+function stkHtml(items, who){
+  var cells = items.map(function(x){ return "<div class='cell filled" + (who === "b" ? " b" : "") + "'>" + esc(x) + "</div>"; });
+  while(cells.length < 2) cells.push("<div class='cell empty'>(empty)</div>");
+  return "<div class='stk'>" + cells.join("") + "</div>";
+}
+function procHtml(items, who){
+  if(!items.length) return "<div class='proc'><div class='preg'><span>(taken out)</span><span>-</span></div></div>";
+  return "<div class='proc'>" + items.map(function(x){
+    return "<div class='preg set" + (who === "a" ? " hl" : "") + "'><span>" + esc(x) + "</span><span>saved</span></div>";
+  }).join("") + "</div>";
+}
+function renderSw(st){
+  var s = SW[st];
+  var steps = SWSTEPS.map(function(x, i){
+    var cls = "st" + (x.star ? " star" : "");
+    if(i === s.act) cls += " act"; else if(i < s.act) cls += " on";
+    return "<div class='" + cls + "'><div class='n'>" + x.n + "</div><div>" + (x.star ? "&#9733; " : "") + esc(x.t) + "</div></div>";
+  }).join("");
+  $("body").innerHTML =
+    "<div class='cols3' style='margin-bottom:14px'>" +
+      "<div class='box" + (s.sp === "a" ? " hot" : "") + "'><h3>Process A's kernel stack</h3>" +
+        "<div class='sp " + (s.sp === "a" ? "" : "off") + "'><span class='tag'>SP</span> the stack pointer is here</div>" +
+        stkHtml(s.aStk, "a") + "<h3 style='margin-top:14px'>A's proc structure</h3>" + procHtml(s.aProc, "a") + "</div>" +
+      "<div class='box'><h3>What switch(A -&gt; B) does</h3><div class='steps'>" + steps + "</div>" +
+        "<div style='margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.6;'>" +
+        "goes in on A's stack<br>comes out on B's stack</div></div>" +
+      "<div class='box" + (s.sp === "b" ? " hot" : "") + "'><h3>Process B's kernel stack</h3>" +
+        "<div class='sp " + (s.sp === "b" ? "" : "off") + "'><span class='tag'>SP</span> the stack pointer is here</div>" +
+        stkHtml(s.bStk, "b") + "<h3 style='margin-top:14px'>B's proc structure</h3>" + procHtml(s.bProc, "b") + "</div>" +
+    "</div>";
+  $("msg").className = "msg" + (s.key ? " key" : "");
+  $("msg").innerHTML = s.msg;
+  $("extra").innerHTML = "";
+}
+
+/* ============ Tab 3: registers are saved two times ============ */
+var TWO = [
+  { hl:-1, msg:"The registers are actually saved <b>two times</b>, by different actors, saving different things, to different places. Students often get stuck here, so take it slowly." },
+  { hl:0,  msg:"<b>First time: when the timer interrupt happens.</b> The <b>hardware</b> does it by itself, saving the <b>user registers</b> of the stopped process onto <b>that process's kernel stack</b>. No OS code has run yet." },
+  { hl:1,  msg:"<b>Second time: when the OS decides to switch and calls switch().</b> The <b>kernel code</b> does it on purpose, saving the <b>kernel registers</b> into <b>that process's proc structure</b>." },
+  { hl:2,  msg:"Why two times? Because these are <b>two different trips</b>: one is user -&gt; kernel (hardware, using the stack), the other is kernel A -&gt; kernel B (software, using the proc structure).<br>Together they make it look as if we just trapped in from A and are returning out to B — a clean hand-over." }
+];
+function renderTwo(st){
+  var hl = TWO[st].hl;
+  function card(i, title, who, what, where, color){
+    return "<div class='box" + (hl === i ? " hot" : "") + "' style='" + (hl >= 0 && hl !== i && i < 2 ? "opacity:.45;" : "") + "'>" +
+      "<h3 style='color:" + color + "'>" + title + "</h3>" +
+      "<table class='cmp'><tr><th style='width:28%'>who</th><td>" + who + "</td></tr>" +
+      "<tr><th>saves what</th><td>" + what + "</td></tr>" +
+      "<tr><th>saves where</th><td>" + where + "</td></tr></table></div>";
+  }
+  $("body").innerHTML =
+    "<div class='cols'>" +
+      card(0, "1. When the timer interrupt happens", "<b style='color:var(--amber)'>the hardware</b> (by itself)",
+           "the <b>user</b> registers of the stopped process", "that process's <b>kernel stack</b>", "var(--amber)") +
+      card(1, "2. When switch() is called", "<b style='color:var(--cyan)'>the kernel code</b> (software, on purpose)",
+           "the <b>kernel</b> registers", "that process's <b>proc structure</b>", "var(--cyan)") +
+    "</div>" +
+    (hl === 2 ? "<div class='box hot' style='margin-top:14px'><h3>Put the two trips together</h3>" +
+      "<div style='font-size:13.5px;line-height:1.75'>" +
+      "<span style='color:var(--amber)'>user A</span> — (hardware saves user registers on the kernel stack) &rarr; <span style='color:var(--amber)'>kernel A</span>" +
+      " — (software saves kernel registers in proc) &rarr; <span style='color:var(--cyan)'>kernel B</span>" +
+      " — (hardware puts user registers back) &rarr; <span style='color:var(--green)'>user B</span></div></div>" : "");
+  $("msg").className = "msg";
+  $("msg").innerHTML = TWO[st].msg;
+  $("extra").innerHTML = "";
+}
+
+/* ============ Tab 4: cooperative vs non-cooperative ============ */
+var coop = false;
+function renderCoop(){
+  var data = coop
+    ? { title:"Cooperative: the loop calls usleep(1)", p:[15622, 5], c:[15625, 6],
+        note:"Each turn of the loop the program goes to sleep, so it gives the CPU up by itself. Almost all switches are voluntary.",
+        real:"[R2] usleep(1) each loop" }
+    : { title:"Non-cooperative: no system calls at all in the loop", p:[0, 2951], c:[0, 3045],
+        note:"The program never makes a single system call, so in theory the OS never gets a chance to step in — yet it was still forced off the CPU thousands of times. That is the <b>timer interrupt</b> at work.",
+        real:"[R1] no syscalls in the loop" };
+  $("body").innerHTML =
+    "<div class='cols'>" +
+      "<div class='box'><h3>" + data.title + "</h3>" +
+        "<table class='cmp'><tr><th>process</th><th>gave it up</th><th>forced off</th></tr>" +
+        "<tr><td>parent</td><td class='n " + (data.p[0] > data.p[1] ? "lo" : "") + "'>" + data.p[0] +
+          "</td><td class='n " + (data.p[1] > data.p[0] ? "hi" : "") + "'>" + data.p[1] + "</td></tr>" +
+        "<tr><td>child</td><td class='n " + (data.c[0] > data.c[1] ? "lo" : "") + "'>" + data.c[0] +
+          "</td><td class='n " + (data.c[1] > data.c[0] ? "hi" : "") + "'>" + data.c[1] + "</td></tr></table>" +
+        "<div style='margin-top:12px;font-size:13px;line-height:1.6;color:var(--mute)'>" + data.note + "</div></div>" +
+      "<div class='box'><h3>Where these numbers come from</h3>" +
+        "<div class='term' style='min-height:96px'>$ ./preempt\n<span class='os'>" + esc(data.real) + "</span>\n" +
+        "  parent  " + data.p[0] + " / " + data.p[1] + "\n  child   " + data.c[0] + " / " + data.c[1] + "</div>" +
+        "<div style='margin-top:12px;font-size:12.5px;line-height:1.6;color:var(--mute)'>" +
+        "Two processes locked to the same CPU, each busy for 2 seconds. Then we read from <code>/proc/self/status</code>:<br>" +
+        "<code>voluntary_ctxt_switches</code> (gave it up)<br><code>nonvoluntary_ctxt_switches</code> (forced off)<br><br>" +
+        "Course file: <code>code/W3/preempt.c</code>. Run it yourself.<br>" +
+        "<span style='color:var(--dim)'>(The numbers change on every machine and every run. Look at the size, not the exact value.)</span></div></div>" +
+    "</div>";
+  $("msg").className = "msg" + (coop ? "" : " key");
+  $("msg").innerHTML = coop
+    ? "For cooperation to work, <b>every program must play along</b>. But one program with <code>while(1);</code> and no system calls freezes the whole machine — which is why the OS cannot rely on cooperation alone."
+    : "This is the most convincing number in the chapter: the program made <b>no system calls at all</b>, yet it was still switched out thousands of times. The OS does not depend on the program's help — it depends on the <b>timer interrupt</b>, a hardware feature.";
+  $("extra").innerHTML =
+    "<span class='seg'><button data-cp='0' aria-pressed='" + (!coop) + "'>non-cooperative (no syscalls)</button>" +
+    "<button data-cp='1' aria-pressed='" + coop + "'>cooperative (usleep)</button></span>";
+  Array.prototype.forEach.call($("extra").querySelectorAll("[data-cp]"), function(b){
+    b.addEventListener("click", function(){ coop = b.getAttribute("data-cp") === "1"; render(); });
+  });
+}
+
+/* ============ tabs ============ */
+var TABS = [
+  { name:"1. The big picture", ttl:"From process A to process B: one timer interrupt", note:"OSTEP §6.4",
+    len:function(){ return PAN.length; }, render:renderPan, stepped:true },
+  { name:"2. switch() changes the stack", ttl:"The key step: point the stack pointer at B's stack", note:"OSTEP §6.4 · Figure 6.4",
+    len:function(){ return SW.length; }, render:renderSw, stepped:true },
+  { name:"3. Saved two times", ttl:"The hardware saves once, the software saves again", note:"OSTEP §6.4",
+    len:function(){ return TWO.length; }, render:renderTwo, stepped:true },
+  { name:"4. Cooperative or not", ttl:"Measured: no system calls, still switched out thousands of times", note:"code/W3/preempt.c",
+    len:function(){ return 1; }, render:renderCoop, stepped:false }
+];
+var tab = 0, step = 0;
+function render(){
+  var T = TABS[tab];
+  $("ttl").textContent = T.ttl;
+  $("note").textContent = T.note;
+  T.render(step);
+  var n = T.len();
+  $("prev").disabled = !T.stepped || step === 0;
+  $("next").disabled = !T.stepped || step >= n - 1;
+  $("prev").style.display = $("next").style.display = T.stepped ? "" : "none";
+  $("reset").style.display = T.stepped ? "" : "none";
+  $("dots").innerHTML = T.stepped
+    ? Array.apply(null, Array(n)).map(function(_, i){ return "<i class='" + (i === step ? "on" : "") + "' data-d='" + i + "'></i>"; }).join("")
+    : "";
+  Array.prototype.forEach.call($("dots").querySelectorAll("[data-d]"), function(d){
+    d.addEventListener("click", function(){ step = +d.getAttribute("data-d"); render(); });
+  });
+  Array.prototype.forEach.call($("tabs").children, function(b, i){
+    b.setAttribute("aria-selected", i === tab ? "true" : "false");
+  });
+}
+$("tabs").innerHTML = TABS.map(function(t){ return "<button role='tab'>" + t.name + "</button>"; }).join("");
+Array.prototype.forEach.call($("tabs").children, function(b, i){
+  b.addEventListener("click", function(){ tab = i; step = 0; render(); });
+});
+$("prev").addEventListener("click", function(){ if(step > 0){ step--; render(); } });
+$("next").addEventListener("click", function(){ if(step < TABS[tab].len() - 1){ step++; render(); } });
+$("reset").addEventListener("click", function(){ step = 0; render(); });
+document.addEventListener("keydown", function(e){
+  if(e.key === "ArrowLeft"){ if(step > 0){ step--; render(); } }
+  else if(e.key === "ArrowRight"){ if(step < TABS[tab].len() - 1){ step++; render(); } }
+  else if(e.key === "r" || e.key === "R"){ step = 0; render(); }
+});
+render();
+</script>
+</body>
+</html>

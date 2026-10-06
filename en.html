@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Operating Systems: Interactive Pages</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  :root{--navy:#0E1B2E;--navy2:#132741;--panel:#183253;--line:#284a70;--ink:#EAF1F8;--mute:#9FB6CF;--cyan:#2DC7D8;--amber:#F2B84B;
+    --mono:"IBM Plex Mono","Consolas",monospace;--sans:"Inter","Segoe UI",system-ui,sans-serif;}
+  *{box-sizing:border-box;}
+  body{margin:0;min-height:100vh;color:var(--ink);font-family:var(--sans);
+    background:radial-gradient(1200px 700px at 50% -10%,#17304f 0%,rgba(23,48,79,0) 60%),var(--navy);
+    padding:clamp(20px,5vw,60px) 16px;}
+  .wrap{width:100%;max-width:920px;margin:0 auto;}
+  .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--cyan);
+    display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .eyebrow::before{content:"";width:26px;height:2px;background:var(--cyan);}
+  h1{margin:0 0 8px;font-weight:900;font-size:clamp(28px,5vw,44px);line-height:1.1;text-wrap:balance;}
+  h1 span{color:var(--cyan);}
+  .sub{color:var(--mute);font-size:clamp(14px,2vw,17px);line-height:1.6;margin:0 0 8px;max-width:62ch;}
+  .swap{color:var(--amber);font-family:var(--mono);font-size:13px;text-decoration:none;}
+  .swap:hover{text-decoration:underline;}
+  h2{margin:38px 0 14px;font-size:18px;font-weight:700;display:flex;gap:12px;align-items:baseline;}
+  h2 .wk{font-family:var(--mono);font-size:12.5px;letter-spacing:.16em;color:var(--amber);text-transform:uppercase;}
+  .cards{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));}
+  a.card{display:block;text-decoration:none;color:inherit;background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.5));
+    border:1px solid var(--line);border-left:3px solid var(--cyan);border-radius:14px;padding:20px 22px;transition:.22s;}
+  a.card:hover{border-color:var(--cyan);transform:translateY(-2px);background:var(--panel);}
+  a.card:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;}
+  .tag{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--cyan);text-transform:uppercase;}
+  .title{font-size:19px;font-weight:700;margin:6px 0 6px;}
+  .desc{font-size:13.5px;color:var(--mute);line-height:1.5;}
+  footer{margin-top:44px;font-family:var(--mono);font-size:11.5px;color:#6f89a4;line-height:1.7;}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow">OSTEP</div>
+    <h1><span>Operating Systems</span> Interactive Pages</h1>
+    <p class="sub">Step-by-step pages that follow the textbook. Use <b>←</b> <b>→</b> to step and Space to play; pages marked “interactive” let you change the numbers yourself.</p>
+    
+
+    <h2><span class="wk">Chapter 2</span>Introduction to Operating Systems</h2>
+    <div class="cards">
+      <a class="card" href="os-animation-en.html"><div class="title">What an OS Actually Does</div><div class="desc">Layers → the problem → virtualize → manage → protect → recap</div></a>
+    </div>
+
+    <h2><span class="wk">Chapter 6</span>Limited Direct Execution</h2>
+    <div class="cards">
+      <a class="card" href="lde-en.html"><div class="title">Limited Direct Execution, step by step</div><div class="desc">Walk Figure 6.1 and find its holes, what user and kernel mode can do, a system call there and back, the trap table</div></a>
+      <a class="card" href="context-switch-en.html"><div class="title">Timer Interrupt and Context Switch</div><div class="desc">The Figure 6.3 big picture, how switch() changes the stack pointer, why registers are saved twice, cooperative vs not</div></a>
+    </div>
+
+    <h2><span class="wk">Chapter 7</span>Scheduling: Introduction</h2>
+    <div class="cards">
+      <a class="card" href="scheduler-en.html"><div class="tag">interactive</div><div class="title">Scheduler Simulator: FIFO / SJF / STCF / RR</div><div class="desc">Change arrival times and lengths, see the schedule, turnaround and response at once; load Figures 7.1–7.7 with one click</div></a>
+    </div>
+
+    <h2><span class="wk">Chapter 8</span>Multi-Level Feedback Queue</h2>
+    <div class="cards">
+      <a class="card" href="mlfq-en.html"><div class="tag">interactive</div><div class="title">MLFQ, step by step</div><div class="desc">Walk through the Chapter 8 figures (auto-play and read-aloud), then change the rules, the boost period S and the time slices</div></a>
+    </div>
+
+    <h2><span class="wk">Chapter 9</span>Proportional Share</h2>
+    <div class="cards">
+      <a class="card" href="proportional-en.html"><div class="tag">interactive</div><div class="title">Proportional Share: Lottery and Stride</div><div class="desc">Hold your own lottery, step through Figure 9.1, fairness, stride scheduling and a new job's pass, Linux nice weights</div></a>
+    </div>
+
+    <h2><span class="wk">Chapter 10</span>Multiprocessor Scheduling</h2>
+    <div class="cards">
+      <a class="card" href="multicpu-en.html"><div class="tag">interactive</div><div class="title">Multiprocessor Scheduling, step by step</div><div class="desc">Cache coherence and bus snooping, the List_Pop race (with or without a lock), cache affinity, SQMS vs. MQMS, work stealing</div></a>
+    </div>
+
+    <footer>Shu-Te University · Dept. of Computer Science &amp; Information Engineering · Operating Systems<br>Textbook: Operating Systems: Three Easy Pieces (OSTEP)</footer>
+  </div>
+</body>
+</html>

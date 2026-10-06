@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>比例份額：彩票與步長</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{--sans:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;}
+  :root{
+    --navy:#0E1B2E; --navy2:#132741; --panel:#183253; --panel2:#1d3c61;
+    --line:#284a70; --line2:#33587f;
+    --ink:#EAF1F8; --mute:#9FB6CF; --dim:#6f89a4;
+    --blue:#4A93D6; --cyan:#2DC7D8; --amber:#F2B84B; --green:#54C878; --red:#EA6B5E; --violet:#9B8CE8;
+    --mono:"IBM Plex Mono","Consolas",monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; min-height:100vh; color:var(--ink); font-family:var(--sans);
+    background:radial-gradient(1200px 700px at 50% -10%, #17304f 0%, rgba(23,48,79,0) 60%), var(--navy);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1240px; margin:0 auto; padding:clamp(16px,3vw,30px) clamp(14px,3vw,26px) 28px;
+    display:flex; flex-direction:column; gap:clamp(10px,1.8vh,16px);}
+  a{color:var(--cyan);}
+  code{font-family:var(--mono); font-size:.92em; color:var(--cyan);}
+
+  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--cyan); display:flex; align-items:center; gap:10px;}
+  .eyebrow::before{content:""; width:26px; height:2px; background:var(--cyan);}
+  h1{margin:4px 0 2px; font-weight:900; font-size:clamp(23px,3.6vw,34px); line-height:1.15;}
+  h1 span{color:var(--cyan);}
+  .sub{color:var(--mute); font-size:14px; line-height:1.6; margin:0;}
+
+  .tabs{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;}
+  .tabs button{font-family:var(--sans); font-size:13.5px; font-weight:700; color:var(--mute);
+    background:var(--navy2); border:1px solid var(--line); border-radius:999px;
+    padding:8px 16px; cursor:pointer; transition:.18s;}
+  .tabs button:hover{color:var(--ink); border-color:var(--line2);}
+  .tabs button[aria-selected="true"]{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+
+  .stage{background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.45));
+    border:1px solid var(--line); border-radius:16px; padding:clamp(14px,2.4vw,24px);}
+  .stagehead{display:flex; justify-content:space-between; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:14px;}
+  .stagehead h2{margin:0; font-size:clamp(17px,2.4vw,21px); font-weight:700;}
+  .stagehead .note{font-size:12.5px; color:var(--dim); font-family:var(--mono);}
+
+  .cols{display:grid; gap:14px; grid-template-columns:1fr 1fr;}
+  .cols.wide{grid-template-columns:1.55fr 1fr;}
+  .cols.side{grid-template-columns:330px 1fr;}
+  @media(max-width:960px){.cols,.cols.wide,.cols.side{grid-template-columns:1fr;}}
+
+  .box{background:var(--navy); border:1px solid var(--line); border-radius:12px; padding:14px 16px; min-width:0;}
+  #body > * + *{margin-top:14px;}
+  .box h3{margin:0 0 10px; font-size:13px; letter-spacing:.06em; color:var(--mute); font-weight:700;
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .hint{font-size:12px; color:var(--dim); line-height:1.55;}
+
+  .msg{margin-top:12px; border-left:3px solid var(--cyan); background:rgba(45,199,216,.07);
+    padding:11px 14px; border-radius:0 9px 9px 0; font-size:14px; line-height:1.7; min-height:62px;}
+  .msg.bad{border-left-color:var(--red); background:rgba(234,107,94,.08);}
+  .msg b{color:var(--cyan);} .msg.bad b{color:var(--red);}
+
+  button{font-family:var(--sans); cursor:pointer;}
+  .ctl{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px;}
+  .ctl button,.btn{font-family:var(--sans); font-size:13px; font-weight:700; color:var(--ink);
+    background:var(--panel); border:1px solid var(--line2); border-radius:9px; padding:8px 15px; transition:.16s;}
+  .ctl button:hover:not(:disabled),.btn:hover:not(:disabled){background:var(--panel2); border-color:var(--cyan);}
+  .ctl button:disabled,.btn:disabled{opacity:.35; cursor:default;}
+  .ctl .prim,.btn.prim{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+  .ctl .prim:hover:not(:disabled),.btn.prim:hover:not(:disabled){background:#51d8e6;}
+  .btn.sm{font-size:12px; padding:6px 11px;}
+  .ctl .voice[aria-pressed="true"]{background:var(--amber); border-color:var(--amber); color:#2a1d00;}
+  .dots{display:flex; gap:6px; margin-left:auto; flex-wrap:wrap;}
+  .dots i{width:8px; height:8px; border-radius:50%; background:var(--line2); cursor:pointer; transition:.2s;}
+  .dots i.on{background:var(--cyan); transform:scale(1.25);}
+
+  .seg{display:inline-flex; flex-wrap:wrap; border:1px solid var(--line2); border-radius:9px; overflow:hidden;}
+  .seg button{border:0; border-radius:0; background:var(--navy2); color:var(--mute); padding:7px 13px;
+    font-size:12.5px; font-weight:700;}
+  .seg button:hover{color:var(--ink);}
+  .seg button[aria-pressed="true"]{background:var(--amber); color:#2a1d00;}
+  .chips{display:flex; flex-wrap:wrap; gap:6px;}
+  .chips button{font-size:12px; font-family:var(--sans); background:var(--navy2); color:var(--mute);
+    border:1px solid var(--line); border-radius:7px; padding:6px 10px; font-weight:600;}
+  .chips button:hover{color:var(--cyan); border-color:var(--cyan);}
+  .chips button[aria-pressed="true"]{color:#06202c; background:var(--cyan); border-color:var(--cyan);}
+
+  .field{display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--mute);}
+  input[type=number],select{background:var(--navy2); border:1px solid var(--line); border-radius:7px;
+    color:var(--ink); font-family:var(--mono); font-size:13px; padding:6px 8px; text-align:center;}
+  input[type=number]{width:66px;}
+  input[type=number]:focus,select:focus{outline:none; border-color:var(--cyan);}
+  input[type=range]{accent-color:var(--cyan);}
+
+  table.r{width:100%; border-collapse:collapse; font-size:13px;}
+  table.r th,table.r td{border:1px solid var(--line); padding:7px 9px; text-align:center;}
+  table.r th{background:var(--panel); color:var(--mute); font-size:11.5px; font-weight:700;}
+  table.r td{font-family:var(--mono);}
+  table.r tr.hl td{background:rgba(45,199,216,.12);}
+
+  .term{background:#08131f; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+    font-family:var(--mono); font-size:12.5px; line-height:1.65; color:#cfe3f5; white-space:pre-wrap;}
+
+  .job{display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:24px; padding:0 6px;
+    border-radius:6px; font-weight:700; font-size:12.5px; color:#02121f; font-family:var(--mono);}
+
+  footer{color:var(--dim); font-family:var(--mono); font-size:11.5px; line-height:1.7; margin-top:6px;}
+  .kbd{font-family:var(--mono); font-size:11px; background:var(--panel); border:1px solid var(--line2);
+    border-radius:5px; padding:1px 6px; color:var(--mute);}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important;}}
+
+  /* ---- 號碼線 ---- */
+  .nl{position:relative; margin:26px 0 8px;}
+  .nl-bar{display:flex; height:38px; border-radius:8px; overflow:hidden; border:1px solid var(--line);}
+  .nl-bar div{display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:12px; font-weight:700;
+    color:#02121f; white-space:nowrap; overflow:hidden; border-right:1px solid rgba(0,0,0,.25);}
+  .nl-mark{position:absolute; top:-24px; transform:translateX(-50%); transition:left .55s cubic-bezier(.5,.05,.3,1);
+    font-family:var(--mono); font-size:12px; color:var(--ink); font-weight:700; text-align:center; pointer-events:none;}
+  .nl-mark::after{content:""; display:block; margin:2px auto 0; width:2px; height:52px; background:var(--ink); box-shadow:0 0 8px rgba(234,241,248,.6);}
+  .nl-axis{display:flex; justify-content:space-between; font-family:var(--mono); font-size:10.5px; color:var(--dim); margin-top:4px;}
+  .tix{display:flex; gap:14px; flex-wrap:wrap; align-items:center;}
+  .tix label{display:inline-flex; align-items:center; gap:7px;}
+  .btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;}
+  .sharebar{position:relative; height:12px; background:var(--navy2); border-radius:6px; overflow:hidden; min-width:90px;}
+  .sharebar i{position:absolute; left:0; top:0; bottom:0; border-radius:6px;}
+  .sharebar em{position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--ink);}
+  .recent{display:flex; flex-wrap:wrap; gap:6px; font-family:var(--mono); font-size:12px;}
+  .recent span{display:inline-flex; align-items:center; gap:5px; background:var(--navy2); border:1px solid var(--line); border-radius:7px; padding:3px 7px;}
+  svg text{font-family:var(--mono); font-size:11px; fill:#6f89a4;}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--mute); margin-top:6px; align-items:center;}
+  .legend i{display:inline-block; width:14px; height:3px; border-radius:2px; margin-right:5px; vertical-align:middle;}
+
+  /* ---- 圖 9.1 走一遍 ---- */
+  .code{background:#08131f; border:1px solid var(--line); border-radius:10px; padding:10px 0; font-family:var(--mono); font-size:12.5px; line-height:1.75;}
+  .code .ln{display:block; padding:0 14px; white-space:pre; color:#cfe3f5; border-left:3px solid transparent;}
+  .code .ln .cm{color:#7C93AB; font-style:italic;}
+  .code .ln.hl{background:rgba(45,199,216,.14); border-left-color:var(--cyan);}
+  .list{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:6px 0 4px;}
+  .node{border:1px solid var(--line2); border-radius:9px; padding:8px 12px; background:var(--navy2); text-align:center; min-width:84px; transition:.25s;}
+  .node .nm{font-weight:900; font-size:16px;}
+  .node .tk{font-family:var(--mono); font-size:11.5px; color:var(--mute);}
+  .node.cur{border-color:var(--cyan); background:rgba(45,199,216,.14); box-shadow:0 0 0 1px rgba(45,199,216,.4);}
+  .node.win{border-color:var(--green); background:rgba(84,200,120,.16); box-shadow:0 0 0 1px rgba(84,200,120,.5);}
+  .node.past{opacity:.55;}
+  .arrow{color:var(--dim); font-family:var(--mono);}
+  .bigval{display:flex; gap:22px; flex-wrap:wrap; margin-top:12px; font-family:var(--mono);}
+  .bigval div{font-size:12px; color:var(--dim);}
+  .bigval b{display:block; font-size:24px; color:var(--ink); margin-top:2px;}
+  .cmp{margin-top:10px; font-size:14px;}
+
+  /* ---- 公平性 ---- */
+  .race{display:flex; flex-direction:column; gap:8px; margin-top:8px;}
+  .lanebar{display:grid; grid-template-columns:28px 1fr 74px; gap:10px; align-items:center; font-family:var(--mono); font-size:12.5px;}
+  .lanebar .tr{height:22px; background:var(--navy2); border:1px solid var(--line); border-radius:6px; overflow:hidden;}
+  .lanebar .tr i{display:block; height:100%; transition:width .12s linear;}
+
+  /* ---- 步長 ---- */
+  .tbl{max-height:360px; overflow:auto; border:1px solid var(--line); border-radius:9px;}
+  .tbl table.r{margin:0;}
+  .tbl table.r th{position:sticky; top:0; z-index:1;}
+  td.min{color:var(--cyan); font-weight:700; background:rgba(45,199,216,.08);}
+  .runs{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; font-family:var(--mono); font-size:13px; align-items:center;}
+
+  /* ---- nice ---- */
+  .nicecards{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px;}
+  .nc{border:1px solid var(--line); border-radius:11px; padding:14px; background:var(--navy2);}
+  .nc .top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .nc .w{font-family:var(--mono); font-size:13px; color:var(--mute); margin-top:8px;}
+  .nc .pc{font-family:var(--mono); font-size:28px; font-weight:700; margin-top:4px;}
+  .wtable{display:flex; flex-wrap:wrap; gap:5px; font-family:var(--mono); font-size:11px;}
+  .wtable span{border:1px solid var(--line); border-radius:6px; padding:3px 6px; color:var(--dim);}
+  .wtable span.on{border-color:var(--cyan); color:var(--ink); background:rgba(45,199,216,.12);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">OSTEP 第 9 章 · 第 4 週</div>
+  <h1><span>比例份額</span>　彩票排程與步長排程</h1>
+  <p class="sub">不追求週轉或響應時間，而是讓每個工作拿到一定比例的 CPU。自己抽獎、走一遍圖 9.1、看公平性怎麼隨工作長度變，再看步長排程和 Linux 的 nice 值。</p>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="stage">
+    <div class="stagehead"><h2 id="ttl"></h2><div class="note" id="note"></div></div>
+    <div id="body"></div>
+    <div class="msg" id="msg"></div>
+    <div class="ctl">
+      <button id="prev">← 上一步</button>
+      <button id="next" class="prim">下一步 →</button>
+      <button id="play">▶ 自動播放</button>
+      <button id="reset">重來</button>
+      <button id="voice" class="voice" aria-pressed="false">🔈 朗讀：關</button>
+      <span id="extra"></span>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+  <footer>鍵盤：<span class="kbd">←</span> <span class="kbd">→</span> 逐步　·　<span class="kbd">空白鍵</span> 自動播放　·　<span class="kbd">R</span> 重來<br>對應課程檔案 <code>code/W4/lottery.c</code>、<code>fairness.c</code>、<code>stride.c</code>、<code>nice_share.c</code>；教材：OSTEP 第 9 章<br>樹德科技大學 資訊工程系　·　作業系統</footer>
+</div>
+<script>
+"use strict";
+var T = {"title":"比例份額：彩票與步長","eyebrow":"OSTEP 第 9 章 · 第 4 週","h1":"<span>比例份額<\/span>　彩票排程與步長排程","sub":"不追求週轉或響應時間，而是讓每個工作拿到一定比例的 CPU。自己抽獎、走一遍圖 9.1、看公平性怎麼隨工作長度變，再看步長排程和 Linux 的 nice 值。","footer":"對應課程檔案 <code>code/W4/lottery.c<\/code>、<code>fairness.c<\/code>、<code>stride.c<\/code>、<code>nice_share.c<\/code>；教材：OSTEP 第 9 章","tabs":["① 抽獎","② 圖 9.1 走一遍","③ 公平嗎？","④ 步長排程","⑤ nice 與權重"],"tabTtl":["彩票數就是份額：抽越多次，比例越準","圖 9.1：counter 一路累加，找出中獎者","圖 9.2：工作越長，越公平","表 9.1：每次挑 pass 最小的跑，不靠運氣","真實的 Linux：nice 值換成權重，照比例分 CPU"],"tabNote":["OSTEP §9.1","OSTEP §9.3","OSTEP §9.4","OSTEP §9.6","code/W4/nice_share.c"],"lot":{"tickets":"彩票（改數字可以換份額）","tixNote":"C 填 0 = 沒有 C","draw1":"抽 1 次","drawN":"抽 %n 次","chart":"比例怎麼變（橫軸是抽獎次數，對數刻度）","legend":"<span><i style='background:#4A93D6'><\/i>A 的比例<\/span><span><i style='background:#F2B84B'><\/i>B 的比例<\/span><span>虛線 = 應得的比例<\/span>","result":"結果（共抽 %n 次）","cols":["彩票","應得","中獎","實際","實際 vs 應得"],"recent":"最近 20 次（號碼 → 中獎者）","none":"還沒抽","xLabel":"抽獎次數","intro":"這是課本的例子：A 持有 75 張彩票、B 持有 25 張，總共 100 張。把號碼 0～74 給 A、75～99 給 B，每個時間片從 0～99 抽一個號碼，落在誰的那一段就跑誰。按「抽 1 次」看號碼落在哪裡，再一口氣抽 20 次、1,000 次，看比例怎麼變。","after":"抽了 %n 次：","part":"%j 中了 %k 次（%p%，應得 %q%）","sep":"；","end":"。","few":"次數少的時候，比例常常差很多——課本抽 20 次，B 只中 4 次（20%）。","many":"抽得越多，比例越接近應得的份額：隨機只保證「平均起來」是對的，這就是大數法則。"},"walk":{"tk":"張","cmp":"counter = %c，%c > %w？","yes":"是，停下來","no":"不是，往下走","winTxt":"current 停在 %n：%n 中獎","codeTitle":"圖 9.1　彩票排程的決策","listTitle":"工作列表與 counter","lineNote":"號碼 0～399 依列表順序分給每個工作；winner 落在誰的那一段，就是誰中獎。","random":"隨機抽一個","mStart":"先抽一個號碼：<b>winner = %w<\/b>（0～399）。counter 從 0 開始，current 指向列表的第一個工作。接著沿著列表，把每個工作的彩票數加進 counter。","mMiss":"走到 <b>%name<\/b>：counter 加上它的 %t 張，變成 <b>%c<\/b>。%c 大於 %w 嗎？<b>不是<\/b>，往下一個工作走。","mHit":"走到 <b>%name<\/b>：counter 加上它的 %t 張，變成 <b>%c<\/b>。%c 大於 %w 嗎？<b>是<\/b>，迴圈在這裡停下來。","mWin":"<b>%name 中獎<\/b>，下一個時間片就跑 %name。counter 做的事，就是找出 winner 落在誰的那一段號碼裡：C 擁有 400 個號碼裡的 250 個，所以大約有 62.5% 的機會中獎，剛好是它的彩票比例。換上面的「C → A → B」試試看。","mWinSorted":"列表改成彩票多的排前面（C → A → B），同樣抽到 %w，中獎的變成 <b>%name<\/b>。沒關係：每個工作擁有的號碼一樣多，中獎機率沒變；排序只是讓迴圈通常一兩步就停下來，比較快。"},"fair":{"chart":"圖 9.2　平均的 U 和工作長度 R","trials":"每種 R 做","rerun":"重新跑","avg":"平均 U","each":"每一次實驗","raceTitle":"跑一場比賽看看","go":"▶ 開跑","table":"平均 U","metric":"平均 U","formula":"不公平指標 U = 第一個工作完成的時間 / 第二個工作完成的時間。U = 1 代表兩個同時完成。課本雖然叫它「不公平」指標，其實數字越大越公平。","xLabel":"工作長度 R","intro":"兩個工作的彩票一樣多（各 100 張），長度都是 R 個時間片，每個時間片抽一次獎。<b>U = 第一個完成的時間 / 第二個完成的時間<\/b>，越接近 1 越公平。R = 1 的時候 U 一定是 0.5：一個在時間 1 做完、另一個在時間 2。工作越長，運氣互相抵消，U 越往 1 爬——這就是課本的<b>圖 9.2<\/b>。","raceDone":"R = %R 的這一場：第一個工作在時間 %f 做完，第二個在時間 %s 做完，<b>U = %f / %s = %u<\/b>。多按幾次「開跑」：R 小的時候每場差很多，R 大的時候幾乎每場都接近 1。","raceHint":"選一個 R，按「開跑」：兩個工作各抽各的，看誰先做完。","firstAt":"第一個在時間 %f 做完"},"stride":{"who":"誰跑","now":"現在的 pass：","sep":"、","runFmt":"%n 次（應得 %q%）","tableTitle":"表 9.1　每一列是做決定之前的 pass，以及這次誰跑","ran":"跑了 %n 次：","rule":"步長排程（課本的虛擬碼）","tickets":"A、B、C 有 100、50、250 張彩票 → 步長 = 10000 / 彩票數 = 100、200、40。彩票越多，步長越小。pass 一樣小的時候，挑排在前面的。","one":"跑一次","eight":"跑 8 次","newJob":"新工作 D 加入（100 張，步長 100）","newHint":"D 的 pass 該設多少？先跑幾輪讓大家的 pass 變大，再讓 D 加入，比較兩種設法。","d0":"D 加入：pass = 0","dmin":"D 加入：pass = 目前最小的","intro":"步長排程完全不靠運氣：每次挑 <b>pass 最小<\/b>的工作跑一個時間片，跑完把它的 pass 加上自己的步長。按「跑一次」一列一列看，或直接「跑 8 次」。","progress":"跑了 %n 次。看每一列亮起來的那一格：那就是 pass 最小、這次被選中的工作。","eightDone":"跑完 8 次：<b>C 5 次、A 2 次、B 1 次<\/b>，5 : 2 : 1 剛好就是 250 : 100 : 50。現在三個 pass 都是 200，又一樣了，接下來會重複同樣的過程。彩票排程要長時間平均下來才準，步長排程每跑完一輪就剛好準確。","added0":"D 加入，pass 設成 <b>0<\/b>。其他工作的 pass 已經很大了，D 遠遠落後。按「跑 8 次」看看會發生什麼。","addedMin":"D 加入，pass 設成目前最小的 <b>%p<\/b>。按「跑 8 次」看看 D 怎麼和大家輪流。","after0":"D 一直是 pass 最小的，<b>最長連跑了 %k 次<\/b>（總共 %d 次），其他工作只能等，直到 D 追上大家。這就是步長排程需要「全域狀態」的原因：新工作的 pass 很難設。彩票排程就沒有這個問題，新工作把彩票加進總數就好。","afterMin":"D 從目前最小的 pass 開始，一加入就和大家公平輪流（D 跑了 %d 次）。但要這樣設，排程器就得知道其他工作的 pass——這就是步長排程需要的全域狀態。"},"nice":{"weight":"權重","cardsTitle":"兩個一直在計算的行程，搶同一顆 CPU","real05":"實測（code/W4/nice_share.c，綁在同一顆 CPU 上 3 秒）：A 75.3%、B 24.7%，和權重算出來的幾乎一樣。","realEq":"nice 值一樣，權重一樣，各拿一半（實測 50.2% : 49.8%）。","tableTitle":"Linux 的權重表（nice -20 ～ 19）","tableNote":"nice 每差 1，權重大約差 1.25 倍；nice 0 是 1024。nice 越大越「客氣」，權重越小。","howTitle":"怎麼算","how":"A 的比例 = A 的權重 / (A 的權重 + B 的權重)\n\nnice 0 → 1024，nice 5 → 335\n1024 / (1024 + 335) = 75.3%\n\n權重就像彩票數：\nLinux 不抽獎，而是照權重的比例\n分配 CPU 時間。","intro":"真實的 Linux 怎麼按比例分 CPU？它把 <b>nice 值換成權重<\/b>，再照權重的比例分。nice 0 的權重是 1024、nice 5 是 335，所以 A 應得 1024 / (1024 + 335) ≈ <b>75%<\/b>，B ≈ <b>25%<\/b>——和彩票例子的 75 : 25 一樣。第 8 章說 nice 是使用者給 OS 的「建議」；在 Linux 上，這個建議就是權重。改改兩個 nice 值看看。","after":"現在 A 應得 <b>%a%<\/b>、B 應得 <b>%b%<\/b>。在 Linux 上可以用 <code>./nice_share 10<\/code> 這類指令實際量量看。"},"ui":{"htmlLang":"zh-Hant","fonts":"<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap\">","sans":"\"Noto Sans TC\",\"Microsoft JhengHei\",\"PingFang TC\",sans-serif","prev":"← 上一步","next":"下一步 →","play":"▶ 自動播放","pause":"❚❚ 暫停","reset":"重來","voiceOff":"🔈 朗讀：關","voiceOn":"🔊 朗讀：開","noVoice":"這台電腦沒有中文語音","voiceLang":"zh-TW","voiceRate":1,"msPerChar":190,"keys":"鍵盤：<span class=\"kbd\">←<\/span> <span class=\"kbd\">→<\/span> 逐步　·　<span class=\"kbd\">空白鍵<\/span> 自動播放　·　<span class=\"kbd\">R<\/span> 重來","colon":"：","listSep":"、","school":"樹德科技大學 資訊工程系　·　作業系統"}};
+/* ===== 共用引擎：分頁、逐步、自動播放、朗讀（W4 三頁共用） ===== */
+var $ = function(id){ return document.getElementById(id); };
+var esc = function(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+var each = function(list, fn){ Array.prototype.forEach.call(list, fn); };
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+var JOBCOLOR = { A:"#4A93D6", B:"#F2B84B", C:"#2DC7D8", D:"#54C878", E:"#9B8CE8" };
+function jobChip(name, extra){ return "<span class='job' style='background:" + (JOBCOLOR[name] || "#9FB6CF") + "'" + (extra || "") + ">" + name + "</span>"; }
+function pct(part, whole){ return whole ? Math.round(1000 * part / whole) / 10 : 0; }
+function fill(s, map){ return String(s).replace(/%(\w+)/g, function(m, k){ return Object.prototype.hasOwnProperty.call(map, k) ? map[k] : m; }); }
+
+var TABS = [], tab = 0, step = 0;
+var playing = false, playTimer = null;
+var speech = { ok:("speechSynthesis" in window), on:false, voice:null, last:"", token:0 };
+
+function setMsg(html, bad){ var m = $("msg"); m.className = "msg" + (bad ? " bad" : ""); m.innerHTML = html; }
+function setExtra(html){ $("extra").innerHTML = html; }
+
+function render(){
+  var tb = TABS[tab];
+  var n = tb.stepped ? tb.len() : 1;
+  if(step > n - 1) step = n - 1;
+  if(step < 0) step = 0;
+  $("ttl").innerHTML = tb.ttl;
+  $("note").textContent = tb.note || "";
+  setExtra("");
+  tb.render(step);
+  $("prev").disabled = !tb.stepped || step === 0;
+  $("next").disabled = !tb.stepped || step >= n - 1;
+  ["prev", "next", "reset", "play"].forEach(function(id){ $(id).style.display = tb.stepped ? "" : "none"; });
+  $("play").textContent = playing ? T.ui.pause : T.ui.play;
+  $("dots").innerHTML = tb.stepped
+    ? Array.apply(null, Array(n)).map(function(_, i){ return "<i class='" + (i === step ? "on" : "") + "' data-d='" + i + "'></i>"; }).join("")
+    : "";
+  each($("dots").querySelectorAll("[data-d]"), function(d){
+    d.addEventListener("click", function(){ stopPlay(); step = +d.getAttribute("data-d"); render(); });
+  });
+  each($("tabs").children, function(b, i){ b.setAttribute("aria-selected", i === tab ? "true" : "false"); });
+  try { history.replaceState(null, "", "#tab=" + (tab + 1) + (tb.stepped ? "&step=" + (step + 1) : "")); } catch(e) {}
+  if(tb.stepped) narrate();
+}
+function readHash(){                                  // 網址 #tab=2&step=4 可以直接打開某一頁的某一步
+  var m = /tab=(\d+)/.exec(location.hash || ""), k = /step=(\d+)/.exec(location.hash || "");
+  if(m && +m[1] >= 1 && +m[1] <= TABS.length) tab = +m[1] - 1;
+  if(k && +k[1] >= 1) step = +k[1] - 1;
+}
+
+/* ---------- 朗讀：用瀏覽器內建的語音（Windows 有中文語音 Hanhan / Yating / Zhiwei） ---------- */
+function pickVoice(){
+  if(!speech.ok) { $("voice").style.display = "none"; return; }
+  var vs = window.speechSynthesis.getVoices() || [];
+  var want = T.ui.voiceLang.toLowerCase(), pre = want.split("-")[0];
+  var norm = function(v){ return (v.lang || "").toLowerCase().replace("_", "-"); };
+  var exact = vs.filter(function(v){ return norm(v) === want; });
+  var loose = vs.filter(function(v){ return norm(v).indexOf(pre) === 0; });
+  speech.voice = exact[0] || loose[0] || null;
+  $("voice").disabled = !speech.voice;
+  $("voice").title = speech.voice ? speech.voice.name : T.ui.noVoice;
+}
+function chunks(text){
+  var parts = text.match(/[^\u3002\uff01\uff1f\uff1b.!?;]+[\u3002\uff01\uff1f\uff1b.!?;]*/g) || [text], out = [], buf = "";
+  parts.forEach(function(p){
+    if((buf + p).length > 150 && buf){ out.push(buf); buf = p; } else buf += p;
+  });
+  if(buf.trim()) out.push(buf);
+  return out;
+}
+function speakNow(text, done){
+  var my = ++speech.token;
+  window.speechSynthesis.cancel();
+  var parts = chunks(text), i = 0;
+  (function next(){
+    if(my !== speech.token) return;
+    if(i >= parts.length){ if(done) done(); return; }
+    var u = new SpeechSynthesisUtterance(parts[i++]);
+    u.voice = speech.voice; u.lang = speech.voice.lang; u.rate = T.ui.voiceRate;
+    u.onend = next;
+    u.onerror = function(){ if(my === speech.token && done) done(); };
+    window.speechSynthesis.speak(u);
+  })();
+}
+function msgText(){ return ($("msg").textContent || "").replace(/\s+/g, " ").trim(); }
+function narrate(){
+  var text = msgText();
+  if(playing){
+    clearTimeout(playTimer);
+    var go = function(){ if(playing) playTimer = setTimeout(advance, 650); };
+    if(speech.on && speech.voice) speakNow(text, go);
+    else playTimer = setTimeout(advance, Math.min(16000, Math.max(2400, text.length * T.ui.msPerChar)));
+    speech.last = text;
+    return;
+  }
+  if(speech.on && speech.voice && text && text !== speech.last){ speech.last = text; speakNow(text, null); }
+}
+function sayMsg(){                                  // 互動頁面：換了例子才唸，拉滑桿時不唸
+  if(speech.on && speech.voice){ speech.last = msgText(); speakNow(speech.last, null); }
+}
+function stopSpeech(){ speech.token++; if(speech.ok) window.speechSynthesis.cancel(); }
+function advance(){
+  var tb = TABS[tab];
+  if(!tb.stepped || step >= tb.len() - 1){ stopPlay(); return; }
+  step++; render();
+}
+function stopPlay(){ playing = false; clearTimeout(playTimer); $("play").textContent = T.ui.play; }
+function togglePlay(){
+  if(!TABS[tab].stepped) return;
+  if(playing){ stopPlay(); stopSpeech(); return; }
+  playing = true;
+  if(step >= TABS[tab].len() - 1) step = 0;
+  render();
+}
+
+function startEngine(tabs){
+  TABS = tabs;
+  $("tabs").innerHTML = TABS.map(function(t){ return "<button role='tab'>" + t.name + "</button>"; }).join("");
+  each($("tabs").children, function(b, i){
+    b.addEventListener("click", function(){ stopPlay(); stopSpeech(); speech.last = ""; tab = i; step = 0; if(TABS[i].enter) TABS[i].enter(); render(); });
+  });
+  $("prev").addEventListener("click", function(){ stopPlay(); if(step > 0){ step--; render(); } });
+  $("next").addEventListener("click", function(){ stopPlay(); if(step < TABS[tab].len() - 1){ step++; render(); } });
+  $("reset").addEventListener("click", function(){ stopPlay(); step = 0; render(); });
+  $("play").addEventListener("click", togglePlay);
+  $("voice").addEventListener("click", function(){
+    speech.on = !speech.on;
+    $("voice").setAttribute("aria-pressed", speech.on ? "true" : "false");
+    $("voice").textContent = speech.on ? T.ui.voiceOn : T.ui.voiceOff;
+    if(speech.on){ speech.last = ""; if(TABS[tab].stepped && !playing) narrate(); else sayMsg(); }
+    else stopSpeech();
+  });
+  document.addEventListener("keydown", function(e){
+    var tag = (e.target && e.target.tagName) || "";
+    if(tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if(e.key === "ArrowLeft"){ stopPlay(); if(step > 0){ step--; render(); } }
+    else if(e.key === "ArrowRight"){ stopPlay(); if(TABS[tab].stepped && step < TABS[tab].len() - 1){ step++; render(); } }
+    else if(e.key === "r" || e.key === "R"){ stopPlay(); step = 0; render(); }
+    else if(e.key === " " && TABS[tab].stepped){ e.preventDefault(); togglePlay(); }
+  });
+  if(speech.ok){ pickVoice(); window.speechSynthesis.onvoiceschanged = pickVoice; }
+  else $("voice").style.display = "none";
+  readHash();
+  if(TABS[tab].enter) TABS[tab].enter();
+  render();
+}
+
+var NAMES = ["A", "B", "C"];
+function rnd(n){ return Math.floor(Math.random() * n); }
+function fmt(n){ return n.toLocaleString("en-US"); }
+
+/* ============ 分頁 1：抽獎 ============ */
+var lot = { tix:[75, 25, 0], n:0, cnt:[0, 0, 0], hist:null, last:null, recent:[] };
+var LOTMAX = 100000;
+function lotReset(){
+  lot.n = 0; lot.cnt = [0, 0, 0]; lot.last = null; lot.recent = [];
+  lot.hist = [new Int32Array(LOTMAX + 1), new Int32Array(LOTMAX + 1), new Int32Array(LOTMAX + 1)];
+}
+lotReset();
+function lotTotal(){ return lot.tix[0] + lot.tix[1] + lot.tix[2]; }
+function lotWinner(num){                                     // 號碼落在哪一段：和圖 9.1 一樣累加
+  var c = 0;
+  for(var j = 0; j < 3; j++){ c += lot.tix[j]; if(c > num) return j; }
+  return 2;
+}
+function lotDraw(k){
+  var tot = lotTotal();
+  if(!tot) return;
+  for(var i = 0; i < k && lot.n < LOTMAX; i++){
+    var num = rnd(tot), w = lotWinner(num);
+    lot.cnt[w]++; lot.n++;
+    for(var j = 0; j < 3; j++) lot.hist[j][lot.n] = lot.cnt[j];
+    lot.last = num;
+    lot.recent.push([num, w]); if(lot.recent.length > 20) lot.recent.shift();
+  }
+}
+function numberLine(items, mark){                            // items：[[名稱, 彩票數], …]，依列表順序
+  var tot = items.reduce(function(a, x){ return a + x[1]; }, 0), start = 0, segs = "";
+  items.forEach(function(x){
+    var t = x[1];
+    if(!t) return;
+    var lbl = x[0] + " " + start + "–" + (start + t - 1);
+    segs += "<div style='flex:" + t + ";background:" + JOBCOLOR[x[0]] + "'>" + (t / tot > .12 ? lbl : x[0]) + "</div>";
+    start += t;
+  });
+  var mk = mark == null ? "" : "<div class='nl-mark' style='left:" + ((mark + .5) / tot * 100) + "%'>" + mark + "</div>";
+  return "<div class='nl'>" + mk + "<div class='nl-bar'>" + segs + "</div><div class='nl-axis'><span>0</span><span>" + (tot - 1) + "</span></div></div>";
+}
+function lotChart(){
+  var W = 640, H = 230, padL = 40, padB = 26, padT = 10, padR = 12, n = lot.n;
+  var xmax = Math.max(10, n), lx = function(v){ return padL + (Math.log10(v) / Math.log10(xmax)) * (W - padL - padR); };
+  var y = function(p){ return padT + (1 - p) * (H - padT - padB); };
+  var s = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' style='display:block'>";
+  [0, .25, .5, .75, 1].forEach(function(p){
+    s += "<line x1='" + padL + "' x2='" + (W - padR) + "' y1='" + y(p) + "' y2='" + y(p) + "' stroke='#284a70' stroke-width='1'/>" +
+         "<text x='" + (padL - 6) + "' y='" + (y(p) + 4) + "' text-anchor='end'>" + (p * 100) + "%</text>";
+  });
+  for(var d = 1; d <= xmax; d *= 10){
+    s += "<line x1='" + lx(d) + "' x2='" + lx(d) + "' y1='" + padT + "' y2='" + (H - padB) + "' stroke='#1d3c61' stroke-width='1'/>" +
+         "<text x='" + lx(d) + "' y='" + (H - 8) + "' text-anchor='middle'>" + fmt(d) + "</text>";
+  }
+  var tot = lotTotal();
+  [0, 1, 2].forEach(function(j){
+    if(!lot.tix[j]) return;
+    var col = JOBCOLOR[NAMES[j]], tgt = lot.tix[j] / tot;
+    s += "<line x1='" + padL + "' x2='" + (W - padR) + "' y1='" + y(tgt) + "' y2='" + y(tgt) + "' stroke='" + col + "' stroke-dasharray='5 5' opacity='.55'/>";
+    if(n >= 1){
+      var pts = [], last = -1;
+      for(var i = 0; i <= 160; i++){
+        var k = Math.max(1, Math.round(Math.pow(n, i / 160)));
+        if(k === last) continue; last = k;
+        pts.push(lx(k).toFixed(1) + "," + y(lot.hist[j][k] / k).toFixed(1));
+      }
+      s += "<polyline points='" + pts.join(" ") + "' fill='none' stroke='" + col + "' stroke-width='2.2'/>";
+    }
+  });
+  s += "<text x='" + (W - padR - 4) + "' y='" + (H - padB - 7) + "' text-anchor='end'>" + T.lot.xLabel + " →</text></svg>";
+  return s;
+}
+function renderLot(){
+  var tot = lotTotal();
+  var rows = [0, 1, 2].filter(function(j){ return lot.tix[j] > 0; }).map(function(j){
+    var tg = pct(lot.tix[j], tot), act = pct(lot.cnt[j], lot.n), col = JOBCOLOR[NAMES[j]];
+    return "<tr><td>" + jobChip(NAMES[j]) + "</td><td>" + lot.tix[j] + "</td><td>" + tg + "%</td><td>" + fmt(lot.cnt[j]) + "</td><td>" + (lot.n ? act + "%" : "—") +
+      "</td><td style='width:34%'><div class='sharebar'><i style='width:" + (lot.n ? act : 0) + "%;background:" + col + "'></i><em style='left:" + tg + "%'></em></div></td></tr>";
+  }).join("");
+  $("body").innerHTML =
+    "<div class='cols wide'><div>" +
+      "<div class='box'><h3>" + T.lot.tickets + "</h3><div class='tix'>" +
+        [0, 1, 2].map(function(j){ return "<label>" + jobChip(NAMES[j]) + "<input type='number' min='0' max='1000' value='" + lot.tix[j] + "' data-tix='" + j + "'></label>"; }).join("") +
+        "<span class='hint'>" + T.lot.tixNote + "</span></div>" +
+        numberLine(lot.tix.map(function(t, j){ return [NAMES[j], t]; }), lot.last) +
+        "<div class='btns'><button class='btn prim' data-draw='1'>" + T.lot.draw1 + "</button>" +
+        [20, 100, 1000, 10000].map(function(k){ return "<button class='btn' data-draw='" + k + "'>" + fill(T.lot.drawN, { n:fmt(k) }) + "</button>"; }).join("") +
+        "<button class='btn' id='lotreset'>" + T.ui.reset + "</button></div></div>" +
+      "<div class='box'><h3>" + T.lot.chart + "</h3>" + lotChart() + "<div class='legend'>" + T.lot.legend + "</div></div>" +
+    "</div><div>" +
+      "<div class='box'><h3>" + fill(T.lot.result, { n:fmt(lot.n) }) + "</h3><table class='r'><tr><th></th><th>" + T.lot.cols.join("</th><th>") + "</th></tr>" + rows + "</table></div>" +
+      "<div class='box'><h3>" + T.lot.recent + "</h3><div class='recent'>" +
+        (lot.recent.length ? lot.recent.map(function(x){ return "<span>" + x[0] + " " + jobChip(NAMES[x[1]]) + "</span>"; }).join("") : "<span class='hint' style='border:0;background:none'>" + T.lot.none + "</span>") +
+      "</div></div>" +
+    "</div></div>";
+  each($("body").querySelectorAll("[data-draw]"), function(b){
+    b.addEventListener("click", function(){ lotDraw(+b.getAttribute("data-draw")); renderLot(); lotMsg(); });
+  });
+  $("lotreset").addEventListener("click", function(){ lotReset(); renderLot(); lotMsg(); });
+  each($("body").querySelectorAll("[data-tix]"), function(inp){
+    inp.addEventListener("change", function(){
+      var v = parseInt(inp.value, 10); if(isNaN(v) || v < 0) v = 0;
+      lot.tix[+inp.getAttribute("data-tix")] = v;
+      if(!lotTotal()) lot.tix[0] = 1;
+      lotReset(); renderLot(); lotMsg();
+    });
+  });
+}
+function lotMsg(){
+  if(!lot.n){ setMsg(T.lot.intro); return; }
+  var tot = lotTotal(), parts = [0, 1, 2].filter(function(j){ return lot.tix[j]; }).map(function(j){
+    return fill(T.lot.part, { j:NAMES[j], k:fmt(lot.cnt[j]), p:pct(lot.cnt[j], lot.n), q:pct(lot.tix[j], tot) });
+  });
+  setMsg(fill(T.lot.after, { n:fmt(lot.n) }) + parts.join(T.lot.sep) + T.lot.end + (lot.n < 200 ? T.lot.few : T.lot.many));
+}
+
+/* ============ 分頁 2：圖 9.1 走一遍 ============ */
+var walk = { winner:300, sorted:false };
+var BASELIST = [["A", 100], ["B", 50], ["C", 250]];
+function walkList(){ return walk.sorted ? [BASELIST[2], BASELIST[0], BASELIST[1]] : BASELIST; }
+function walkSteps(){
+  var L = walkList(), steps = [{ cur:-1, counter:0, line:[1, 2], kind:"start" }], c = 0;
+  for(var i = 0; i < L.length; i++){
+    c += L[i][1];
+    steps.push({ cur:i, counter:c, line:[3, 4, 5], kind:"visit", hit:c > walk.winner });
+    if(c > walk.winner){ steps.push({ cur:i, counter:c, line:[6, 7, 9], kind:"win" }); break; }
+  }
+  return steps;
+}
+var CODE = [
+  "int counter = 0;",
+  "int winner = getrandom(0, totaltickets);",
+  "node_t *current = head;",
+  "while (current) {",
+  "    counter = counter + current->tickets;",
+  "    if (counter > winner)",
+  "        break;            // found the winner",
+  "    current = current->next;",
+  "}",
+  "// 'current' is the winner: schedule it..."
+];
+function renderWalk(st){
+  var steps = walkSteps(), s = steps[Math.min(st, steps.length - 1)], L = walkList();
+  var hl = s.kind === "start" ? [0, 1, 2] : (s.kind === "visit" ? (s.hit ? [3, 4, 5] : [3, 4, 5, 7]) : [6, 9]);
+  var code = CODE.map(function(ln, i){
+    var m = ln.indexOf("//"), body = m >= 0 ? esc(ln.slice(0, m)) + "<span class='cm'>" + esc(ln.slice(m)) + "</span>" : esc(ln);
+    return "<span class='ln" + (hl.indexOf(i) >= 0 ? " hl" : "") + "'>" + body + "</span>";
+  }).join("");
+  var nodes = "<span class='arrow'>head →</span>" + L.map(function(x, i){
+    var cls = "node";
+    if(s.kind === "win" && i === s.cur) cls += " win";
+    else if(i === s.cur) cls += " cur";
+    else if(s.cur >= 0 && i < s.cur) cls += " past";
+    return "<div class='" + cls + "'><div class='nm' style='color:" + JOBCOLOR[x[0]] + "'>" + x[0] + "</div><div class='tk'>" + x[1] + " " + T.walk.tk + "</div></div><span class='arrow'>→</span>";
+  }).join("") + "<span class='arrow'>NULL</span>";
+  var cmp = "";
+  if(s.kind === "visit") cmp = "<div class='cmp'>" + fill(T.walk.cmp, { c:s.counter, w:walk.winner }) + " <b style='color:" + (s.hit ? "var(--green)" : "var(--amber)") + "'>" + (s.hit ? T.walk.yes : T.walk.no) + "</b></div>";
+  if(s.kind === "win") cmp = "<div class='cmp'>" + fill(T.walk.winTxt, { n:"<b style='color:" + JOBCOLOR[L[s.cur][0]] + "'>" + L[s.cur][0] + "</b>" }) + "</div>";
+  $("body").innerHTML =
+    "<div class='cols'><div class='box'><h3>" + T.walk.codeTitle + "</h3><div class='code'>" + code + "</div></div>" +
+    "<div class='box'><h3>" + T.walk.listTitle + "</h3><div class='list'>" + nodes + "</div>" +
+      "<div class='bigval'><div>winner<b>" + walk.winner + "</b></div><div>counter<b>" + s.counter + "</b></div><div>current<b>" + (s.cur >= 0 ? L[s.cur][0] : "A") + "</b></div></div>" + cmp +
+      numberLine(L, walk.winner) +
+      "<p class='hint' style='margin:4px 0 0'>" + T.walk.lineNote + "</p></div></div>";
+  var msgs = { start:T.walk.mStart, visit:(s.hit ? T.walk.mHit : T.walk.mMiss), win:(walk.sorted ? T.walk.mWinSorted : T.walk.mWin) };
+  setMsg(fill(msgs[s.kind], { name:s.cur >= 0 ? L[s.cur][0] : "", c:s.counter, w:walk.winner, t:s.cur >= 0 ? L[s.cur][1] : "" }));
+  setExtra("<span class='seg'><button data-ord='0' aria-pressed='" + !walk.sorted + "'>A → B → C</button><button data-ord='1' aria-pressed='" + walk.sorted + "'>C → A → B</button></span> " +
+    "<label class='field'>winner <input type='number' id='wv' min='0' max='399' value='" + walk.winner + "'></label> <button class='btn sm' id='wrnd'>" + T.walk.random + "</button>");
+  each($("extra").querySelectorAll("[data-ord]"), function(b){
+    b.addEventListener("click", function(){ walk.sorted = b.getAttribute("data-ord") === "1"; stopPlay(); step = 0; render(); });
+  });
+  $("wv").addEventListener("change", function(){ var v = parseInt($("wv").value, 10); if(!isNaN(v)){ walk.winner = Math.max(0, Math.min(399, v)); stopPlay(); step = 0; render(); } });
+  $("wrnd").addEventListener("click", function(){ walk.winner = rnd(400); stopPlay(); step = 0; render(); });
+}
+
+/* ============ 分頁 3：公平性（圖 9.2） ============ */
+var fair = { trials:30, data:null, R:10, race:null, timer:0 };
+var LENS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+function oneTrial(R){
+  var left = [R, R], t = 0;
+  while(left[0] > 0 && left[1] > 0){ left[rnd(200) < 100 ? 0 : 1]--; t++; }
+  return t / (t + left[0] + left[1]);
+}
+function fairRun(){ fair.data = LENS.map(function(R){ var v = []; for(var i = 0; i < fair.trials; i++) v.push(oneTrial(R)); return v; }); }
+function fairChart(){
+  var W = 640, H = 250, padL = 40, padB = 28, padT = 10, padR = 16;
+  var lx = function(v){ return padL + Math.log10(v) / 3 * (W - padL - padR); };
+  var y = function(p){ return padT + (1 - p) * (H - padT - padB); };
+  var s = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' style='display:block'>";
+  [0, .2, .4, .6, .8, 1].forEach(function(p){
+    s += "<line x1='" + padL + "' x2='" + (W - padR) + "' y1='" + y(p) + "' y2='" + y(p) + "' stroke='#284a70'/><text x='" + (padL - 6) + "' y='" + (y(p) + 4) + "' text-anchor='end'>" + p.toFixed(1) + "</text>";
+  });
+  [1, 10, 100, 1000].forEach(function(d){
+    s += "<line x1='" + lx(d) + "' x2='" + lx(d) + "' y1='" + padT + "' y2='" + (H - padB) + "' stroke='#1d3c61'/><text x='" + lx(d) + "' y='" + (H - 9) + "' text-anchor='middle'>" + d + "</text>";
+  });
+  var avg = fair.data.map(function(v){ return v.reduce(function(a, b){ return a + b; }, 0) / v.length; });
+  fair.data.forEach(function(v, i){
+    v.forEach(function(u){ s += "<circle cx='" + (lx(LENS[i]) + (Math.random() - .5) * 8).toFixed(1) + "' cy='" + y(u).toFixed(1) + "' r='2.2' fill='#4A93D6' opacity='.28'/>"; });
+  });
+  s += "<polyline points='" + avg.map(function(a, i){ return lx(LENS[i]).toFixed(1) + "," + y(a).toFixed(1); }).join(" ") + "' fill='none' stroke='#2DC7D8' stroke-width='2.4'/>";
+  avg.forEach(function(a, i){ s += "<circle cx='" + lx(LENS[i]) + "' cy='" + y(a) + "' r='4' fill='#2DC7D8'/>"; });
+  s += "<text x='" + (W - padR - 4) + "' y='" + (H - padB - 7) + "' text-anchor='end'>" + T.fair.xLabel + " →</text></svg>";
+  return { svg:s, avg:avg };
+}
+function renderFair(){
+  if(!fair.data) fairRun();
+  var ch = fairChart();
+  var rows = LENS.map(function(R, i){ return "<tr><td>" + R + "</td><td>" + ch.avg[i].toFixed(2) + "</td></tr>"; }).join("");
+  $("body").innerHTML =
+    "<div class='cols wide'><div>" +
+      "<div class='box'><h3>" + T.fair.chart + "<span class='field'>" + T.fair.trials + " <select id='ftr'>" + [10, 30, 100].map(function(k){ return "<option" + (fair.trials === k ? " selected" : "") + ">" + k + "</option>"; }).join("") +
+        "</select> <button class='btn sm' id='frun'>" + T.fair.rerun + "</button></span></h3>" + ch.svg +
+        "<div class='legend'><span><i style='background:#2DC7D8'></i>" + T.fair.avg + "</span><span><i style='background:#4A93D6;opacity:.5'></i>" + T.fair.each + "</span></div></div>" +
+      "<div class='box'><h3>" + T.fair.raceTitle + "<span class='field'>R <select id='frR'>" + [2, 10, 100].map(function(k){ return "<option" + (fair.R === k ? " selected" : "") + ">" + k + "</option>"; }).join("") +
+        "</select> <button class='btn sm prim' id='frgo'>" + T.fair.go + "</button></span></h3><div id='raceview'></div></div>" +
+    "</div><div class='box'><h3>" + T.fair.table + "</h3><table class='r'><tr><th>R</th><th>" + T.fair.metric + "</th></tr>" + rows + "</table>" +
+      "<p class='hint' style='margin:10px 0 0'>" + T.fair.formula + "</p></div></div>";
+  $("ftr").addEventListener("change", function(){ fair.trials = +$("ftr").value; fairRun(); renderFair(); });
+  $("frun").addEventListener("click", function(){ fairRun(); renderFair(); });
+  $("frR").addEventListener("change", function(){ fair.R = +$("frR").value; });
+  $("frgo").addEventListener("click", raceStart);
+  raceView();
+  setMsg(T.fair.intro);
+}
+function raceStart(){
+  clearInterval(fair.timer);
+  fair.race = { R:fair.R, left:[fair.R, fair.R], t:0, first:0, done:false, last:-1 };
+  var per = Math.max(8, Math.min(140, 3000 / (2 * fair.R)));
+  fair.timer = setInterval(function(){
+    var r = fair.race;
+    if(r.done){ clearInterval(fair.timer); return; }
+    if(r.left[0] > 0 && r.left[1] > 0){ var w = rnd(200) < 100 ? 0 : 1; r.left[w]--; r.t++; r.last = w; if(!r.left[w]) r.first = r.t; }
+    else { var o = r.left[0] ? 0 : 1; r.left[o]--; r.t++; r.last = o; if(!r.left[o]){ r.done = true; } }
+    raceView();
+    if(r.done){ clearInterval(fair.timer); var u = r.first / r.t;
+      setMsg(fill(T.fair.raceDone, { R:r.R, f:r.first, s:r.t, u:u.toFixed(2) })); sayMsg(); }
+  }, per);
+}
+function raceView(){
+  var r = fair.race, v = $("raceview");
+  if(!v) return;
+  if(!r){ v.innerHTML = "<p class='hint' style='margin:0'>" + T.fair.raceHint + "</p>"; return; }
+  v.innerHTML = "<div class='race'>" + [0, 1].map(function(j){
+    var doneN = r.R - r.left[j];
+    return "<div class='lanebar'>" + jobChip(NAMES[j]) + "<div class='tr'><i style='width:" + (doneN / r.R * 100) + "%;background:" + JOBCOLOR[NAMES[j]] + "'></i></div><span>" + doneN + " / " + r.R + "</span></div>";
+  }).join("") + "</div><p class='hint' style='margin:8px 0 0'>t = " + r.t + (r.first ? "&nbsp;·&nbsp;" + fill(T.fair.firstAt, { f:r.first }) : "") + "</p>";
+}
+
+/* ============ 分頁 4：步長排程 ============ */
+var BIG = 10000;
+var strd = null;
+function strideReset(){ strd = { jobs:[["A", 100, 0], ["B", 50, 0], ["C", 250, 0]], rows:[], runs:{ A:0, B:0, C:0, D:0 }, dAdded:false }; }
+strideReset();
+function strideOnce(){
+  var J = strd.jobs, cur = 0;
+  for(var i = 1; i < J.length; i++) if(J[i][2] < J[cur][2]) cur = i;
+  strd.rows.push({ pass:J.map(function(j){ return j[2]; }), who:cur, d:strd.dAdded });
+  J[cur][2] += BIG / J[cur][1];
+  strd.runs[J[cur][0]]++;
+}
+function renderStride(){
+  var J = strd.jobs, hasD = J.length > 3;
+  var head = "<tr>" + J.map(function(j){ return "<th>pass(" + j[0] + ")<br><span style='font-weight:400'>stride " + (BIG / j[1]) + "</span></th>"; }).join("") + "<th>" + T.stride.who + "</th></tr>";
+  var rows = strd.rows.map(function(r, i){
+    var min = Math.min.apply(null, r.pass);
+    var cells = J.map(function(j, k){ return k < r.pass.length ? "<td" + (k === r.who ? " class='min'" : "") + ">" + r.pass[k] + "</td>" : "<td>—</td>"; }).join("");
+    return "<tr" + (i === strd.rows.length - 1 ? " class='hl'" : "") + ">" + cells + "<td>" + jobChip(J[r.who][0]) + "</td></tr>";
+  }).join("");
+  var nowRow = "<tr><td colspan='" + (J.length + 1) + "' style='color:var(--dim);font-family:var(--sans)'>" + T.stride.now + " " + J.map(function(j){ return j[0] + " = " + j[2]; }).join(T.stride.sep) + "</td></tr>";
+  var total = J.reduce(function(a, j){ return a + j[1]; }, 0), n = strd.rows.length;
+  var runs = J.map(function(j){ return jobChip(j[0]) + " " + fill(T.stride.runFmt, { n:strd.runs[j[0]], q:pct(j[1], total) }); }).join("&nbsp;&nbsp;");
+  $("body").innerHTML =
+    "<div class='cols wide'><div class='box'><h3>" + T.stride.tableTitle + "</h3><div class='tbl' id='stbl'><table class='r'>" + head + rows + nowRow + "</table></div>" +
+      "<div class='runs'>" + fill(T.stride.ran, { n:n }) + "&nbsp;&nbsp;" + runs + "</div></div>" +
+    "<div><div class='box'><h3>" + T.stride.rule + "</h3><div class='code' style='font-size:12px'>" +
+      ["curr = remove_min(queue);     // min pass", "schedule(curr);               // run a quantum", "curr->pass += curr->stride;   // next pass", "insert(queue, curr);"].map(function(l){ var m = l.indexOf("//"); return "<span class='ln'>" + (m >= 0 ? esc(l.slice(0, m)) + "<span class='cm'>" + esc(l.slice(m)) + "</span>" : esc(l)) + "</span>"; }).join("") +
+      "</div><p class='hint' style='margin:10px 0 0'>" + T.stride.tickets + "</p>" +
+      "<div class='btns'><button class='btn prim' id='s1'>" + T.stride.one + "</button><button class='btn' id='s8'>" + T.stride.eight + "</button><button class='btn' id='sr'>" + T.ui.reset + "</button></div></div>" +
+      "<div class='box'><h3>" + T.stride.newJob + "</h3><p class='hint' style='margin:0 0 10px'>" + T.stride.newHint + "</p>" +
+      "<div class='btns' style='margin-top:0'><button class='btn' id='d0'" + (hasD ? " disabled" : "") + ">" + T.stride.d0 + "</button><button class='btn' id='dm'" + (hasD ? " disabled" : "") + ">" + T.stride.dmin + "</button></div></div></div></div>";
+  var tb = $("stbl"); tb.scrollTop = tb.scrollHeight;
+  $("s1").addEventListener("click", function(){ strideOnce(); renderStride(); strideMsg(); });
+  $("s8").addEventListener("click", function(){ for(var i = 0; i < 8; i++) strideOnce(); renderStride(); strideMsg(); });
+  $("sr").addEventListener("click", function(){ strideReset(); renderStride(); setMsg(T.stride.intro); });
+  var addD = function(useMin){
+    var p = useMin ? Math.min.apply(null, strd.jobs.map(function(j){ return j[2]; })) : 0;
+    strd.jobs.push(["D", 100, p]); strd.dAdded = true; strd.dMode = useMin;
+    renderStride(); setMsg(fill(useMin ? T.stride.addedMin : T.stride.added0, { p:p })); sayMsg();
+  };
+  $("d0").addEventListener("click", function(){ addD(false); });
+  $("dm").addEventListener("click", function(){ addD(true); });
+}
+function strideMsg(){
+  var n = strd.rows.length, J = strd.jobs;
+  if(J.length > 3){
+    var best = 0, run = 0;                               // D 加入之後，最長連跑了幾次
+    strd.rows.forEach(function(r){ if(!r.d) return; run = J[r.who][0] === "D" ? run + 1 : 0; if(run > best) best = run; });
+    setMsg(fill(strd.dMode ? T.stride.afterMin : T.stride.after0, { d:strd.runs.D, k:best }));
+    return;
+  }
+  if(n === 8 && strd.runs.C === 5) setMsg(T.stride.eightDone); else setMsg(fill(T.stride.progress, { n:n }));
+}
+
+/* ============ 分頁 5：nice 與權重 ============ */
+var WEIGHT = [88761, 71755, 56483, 46273, 36291, 29154, 23254, 18705, 14949, 11916, 9548, 7620, 6100, 4904, 3906,
+  3121, 2501, 1991, 1586, 1277, 1024, 820, 655, 526, 423, 335, 272, 215, 172, 137, 110, 87, 70, 56, 45, 36, 29, 23, 18, 15];
+var nice = [0, 5];
+function renderNice(){
+  var w = nice.map(function(n){ return WEIGHT[n + 20]; }), tot = w[0] + w[1];
+  var opts = function(sel){ var s = ""; for(var v = -20; v <= 19; v++) s += "<option value='" + v + "'" + (v === sel ? " selected" : "") + ">" + v + "</option>"; return s; };
+  var cards = [0, 1].map(function(j){
+    var p = pct(w[j], tot);
+    return "<div class='nc'><div class='top'>" + jobChip(NAMES[j]) + "<label class='field'>nice <select data-n='" + j + "'>" + opts(nice[j]) + "</select></label></div>" +
+      "<div class='sharebar' style='height:14px'><i style='width:" + p + "%;background:" + JOBCOLOR[NAMES[j]] + "'></i></div>" +
+      "<div class='pc' style='color:" + JOBCOLOR[NAMES[j]] + "'>" + p + "%</div><div class='w'>" + T.nice.weight + " " + fmt(w[j]) + "</div></div>";
+  }).join("");
+  var tbl = ""; for(var v = -20; v <= 19; v++) tbl += "<span class='" + (nice.indexOf(v) >= 0 ? "on" : "") + "'>" + v + ": " + WEIGHT[v + 20] + "</span>";
+  var real = nice[0] === 0 && nice[1] === 5 ? T.nice.real05 : (nice[0] === nice[1] ? T.nice.realEq : "");
+  $("body").innerHTML =
+    "<div class='cols wide'><div><div class='box'><h3>" + T.nice.cardsTitle + "</h3><div class='nicecards'>" + cards + "</div>" +
+      "<p style='margin:14px 0 0;font-family:var(--mono);font-size:14px'>" + fmt(w[0]) + " : " + fmt(w[1]) + " ≈ " + pct(w[0], tot) + " : " + pct(w[1], tot) + "</p>" +
+      (real ? "<p class='hint' style='margin:8px 0 0'>" + real + "</p>" : "") + "</div>" +
+      "<div class='box'><h3>" + T.nice.tableTitle + "</h3><div class='wtable'>" + tbl + "</div><p class='hint' style='margin:10px 0 0'>" + T.nice.tableNote + "</p></div></div>" +
+    "<div class='box'><h3>" + T.nice.howTitle + "</h3><div class='term'>" + T.nice.how + "</div></div></div>";
+  each($("body").querySelectorAll("[data-n]"), function(sel){
+    sel.addEventListener("change", function(){ nice[+sel.getAttribute("data-n")] = +sel.value; renderNice(); setMsg(fill(T.nice.after, { a:pct(w0(), tw()), b:pct(w1(), tw()) })); });
+  });
+}
+function w0(){ return WEIGHT[nice[0] + 20]; } function w1(){ return WEIGHT[nice[1] + 20]; } function tw(){ return w0() + w1(); }
+
+/* ============ 分頁 ============ */
+startEngine([
+  { name:T.tabs[0], ttl:T.tabTtl[0], note:T.tabNote[0], stepped:false, len:function(){ return 1; }, render:function(){ renderLot(); lotMsg(); } },
+  { name:T.tabs[1], ttl:T.tabTtl[1], note:T.tabNote[1], stepped:true, len:function(){ return walkSteps().length; }, render:renderWalk },
+  { name:T.tabs[2], ttl:T.tabTtl[2], note:T.tabNote[2], stepped:false, len:function(){ return 1; }, render:renderFair },
+  { name:T.tabs[3], ttl:T.tabTtl[3], note:T.tabNote[3], stepped:false, len:function(){ return 1; }, render:function(){ renderStride(); if(strd.rows.length) strideMsg(); else setMsg(T.stride.intro); } },
+  { name:T.tabs[4], ttl:T.tabTtl[4], note:T.tabNote[4], stepped:false, len:function(){ return 1; }, render:function(){ renderNice(); setMsg(T.nice.intro); } }
+]);
+</script>
+</body>
+</html>

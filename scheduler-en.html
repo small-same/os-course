@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scheduler Simulator: FIFO / SJF / STCF / RR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --navy:#0E1B2E; --navy2:#132741; --panel:#183253; --panel2:#1d3c61;
+    --line:#284a70; --line2:#33587f;
+    --ink:#EAF1F8; --mute:#9FB6CF; --dim:#6f89a4;
+    --blue:#4A93D6; --cyan:#2DC7D8; --amber:#F2B84B; --green:#54C878; --red:#EA6B5E;
+    --mono:"IBM Plex Mono","Consolas",monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; min-height:100vh; color:var(--ink); font-family:var(--sans);
+    background:radial-gradient(1200px 700px at 50% -10%, #17304f 0%, rgba(23,48,79,0) 60%), var(--navy);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1240px; margin:0 auto; padding:clamp(16px,3vw,30px) clamp(14px,3vw,26px) 28px;
+    display:flex; flex-direction:column; gap:clamp(10px,1.8vh,16px);}
+  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--cyan); display:flex; align-items:center; gap:10px;}
+  .eyebrow::before{content:""; width:26px; height:2px; background:var(--cyan);}
+  h1{margin:4px 0 2px; font-weight:900; font-size:clamp(23px,3.6vw,34px); line-height:1.15;}
+  h1 span{color:var(--cyan);}
+  .sub{color:var(--mute); font-size:14px; line-height:1.6; margin:0;}
+  .stage{background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.45));
+    border:1px solid var(--line); border-radius:16px; padding:clamp(14px,2.4vw,24px);}
+  .layout{display:grid; gap:16px; grid-template-columns:330px 1fr;}
+  @media(max-width:960px){.layout{grid-template-columns:1fr;}}
+  .box{background:var(--navy); border:1px solid var(--line); border-radius:12px; padding:14px 16px;}
+  .box h3{margin:0 0 11px; font-size:13px; letter-spacing:.04em; color:var(--mute); font-weight:700;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .jobs{display:flex; flex-direction:column; gap:7px;}
+  .jhead,.jrow{display:grid; grid-template-columns:34px 1fr 1fr 30px; gap:8px; align-items:center;}
+  .jhead{font-size:11px; color:var(--dim); font-family:var(--mono); padding:0 2px;}
+  .jrow .sw{width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:12px; color:#02121f;}
+  .jrow input{width:100%; background:var(--navy2); border:1px solid var(--line); border-radius:7px;
+    color:var(--ink); font-family:var(--mono); font-size:13px; padding:7px 9px; text-align:center;}
+  .jrow input:focus{outline:none; border-color:var(--cyan);}
+  .jrow .del{background:none; border:0; color:var(--dim); cursor:pointer; font-size:16px; padding:0; line-height:1;}
+  .jrow .del:hover{color:var(--red);}
+  button{font-family:var(--sans); cursor:pointer;}
+  .btn{font-size:12.5px; font-weight:700; color:var(--ink); background:var(--panel);
+    border:1px solid var(--line2); border-radius:8px; padding:7px 13px; transition:.16s;}
+  .btn:hover{background:var(--panel2); border-color:var(--cyan);}
+  .btn.sm{font-size:11.5px; padding:5px 10px;}
+  .seg{display:flex; flex-wrap:wrap; gap:6px;}
+  .seg button{font-size:12.5px; font-weight:700; background:var(--navy2); color:var(--mute);
+    border:1px solid var(--line); border-radius:8px; padding:7px 13px; transition:.16s;}
+  .seg button:hover{color:var(--ink);}
+  .seg button[aria-pressed="true"]{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+  .presets{display:flex; flex-wrap:wrap; gap:6px;}
+  .presets button{font-size:11.5px; font-family:var(--mono); background:var(--navy2); color:var(--mute);
+    border:1px solid var(--line); border-radius:7px; padding:5px 9px;}
+  .presets button:hover{color:var(--cyan); border-color:var(--cyan);}
+  .slice{display:flex; align-items:center; gap:9px; font-size:12.5px; color:var(--mute); margin-top:10px;}
+  .slice input{width:62px; background:var(--navy2); border:1px solid var(--line); border-radius:7px;
+    color:var(--ink); font-family:var(--mono); font-size:13px; padding:6px 8px; text-align:center;}
+  .gwrap{overflow-x:auto; padding-bottom:4px;}
+  .gantt{position:relative; height:52px; min-width:100%;}
+  .seg2{position:absolute; top:0; height:38px; border-radius:5px; display:flex; align-items:center;
+    justify-content:center; font-size:12px; font-weight:700; color:#02121f; border:1px solid rgba(0,0,0,.25);
+    overflow:hidden; white-space:nowrap;}
+  .seg2.idle{background:#1b2c42; color:var(--dim); border-color:var(--line);}
+  .axis{position:relative; height:18px; min-width:100%;}
+  .tick{position:absolute; font-family:var(--mono); font-size:10.5px; color:var(--dim);}
+  table.r{width:100%; border-collapse:collapse; font-size:13px; margin-top:4px;}
+  table.r th,table.r td{border:1px solid var(--line); padding:8px 10px; text-align:center;}
+  table.r th{background:var(--panel); color:var(--mute); font-size:11.5px; font-weight:700;}
+  table.r td.j{font-weight:700;} table.r td{font-family:var(--mono);}
+  table.r tr.avg td{background:rgba(45,199,216,.09); font-weight:700; color:var(--cyan);}
+  .cmpgrid{display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(250px,1fr));}
+  .cmpcard{border:1px solid var(--line); border-radius:11px; padding:12px 14px; background:var(--navy);}
+  .cmpcard h4{margin:0 0 9px; font-size:14px; font-weight:700;}
+  .cmpcard .nums{display:flex; gap:18px; font-family:var(--mono); font-size:12.5px;}
+  .cmpcard .nums div span{display:block; font-size:10.5px; color:var(--dim); font-family:var(--sans); margin-bottom:2px;}
+  .best{color:var(--green);} .worst{color:var(--red);}
+  .msg{margin-top:14px; border-left:3px solid var(--cyan); background:rgba(45,199,216,.07);
+    padding:11px 14px; border-radius:0 9px 9px 0; font-size:13.5px; line-height:1.65;}
+  .msg b{color:var(--cyan);}
+  footer{color:var(--dim); font-family:var(--mono); font-size:11.5px; line-height:1.7; margin-top:6px;}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">OSTEP Chapter 7 · Week 3</div>
+  <h1><span>Scheduler Simulator</span>: FIFO / SJF / STCF / RR</h1>
+  <p class="sub">Change when each job arrives and how long it is. Watch how the four schedulers order the jobs, and how turnaround time and response time change. Every example from Figures 7.1&ndash;7.7 loads with one click.</p>
+
+  <div class="stage">
+    <div class="layout">
+      <div>
+        <div class="box" style="margin-bottom:14px">
+          <h3>Jobs<button class="btn sm" id="add">+ add a job</button></h3>
+          <div class="jhead"><div></div><div>arrives</div><div>length</div><div></div></div>
+          <div class="jobs" id="jobs"></div>
+        </div>
+        <div class="box" style="margin-bottom:14px">
+          <h3>Scheduling policy</h3>
+          <div class="seg" id="pol"></div>
+          <div class="slice" id="sliceBox">
+            <span>time slice</span><input id="slice" type="number" min="1" max="20" value="1">
+            <span style="color:var(--dim);font-size:11.5px">(only RR uses it)</span>
+          </div>
+        </div>
+        <div class="box">
+          <h3>Examples from the book</h3>
+          <div class="presets" id="presets"></div>
+        </div>
+      </div>
+      <div>
+        <div class="box" style="margin-bottom:14px">
+          <h3 id="gtitle">Schedule</h3>
+          <div class="gwrap"><div class="gantt" id="gantt"></div><div class="axis" id="axis"></div></div>
+          <table class="r" id="res"></table>
+        </div>
+        <div class="box">
+          <h3>Four policies, same jobs</h3>
+          <div class="cmpgrid" id="cmp"></div>
+        </div>
+      </div>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <footer>
+    Same algorithm as the course file <code>code/W3/sched.c</code><br>
+    Shu-Te University, Dept. of CSIE &nbsp;·&nbsp; Operating Systems &nbsp;·&nbsp; OSTEP Chapter 7
+  </footer>
+</div>
+
+<script>
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var COLORS = ["#4A93D6", "#2DC7D8", "#F2B84B", "#54C878", "#9B8CE8", "#EA6B5E"];
+var POLICIES = [
+  { id:"FIFO", name:"FIFO", full:"first in, first out" },
+  { id:"SJF",  name:"SJF",  full:"shortest job first" },
+  { id:"STCF", name:"STCF", full:"shortest time-to-completion first (preempts)" },
+  { id:"RR",   name:"RR",   full:"round robin" }
+];
+var PRESETS = [
+  { n:"Fig 7.1", jobs:[["A",0,10],["B",0,10],["C",0,10]], pol:"FIFO", q:1,
+    note:"Three jobs, all the same length, all arrive together. FIFO does well here: average turnaround is 20." },
+  { n:"Fig 7.2", jobs:[["A",0,100],["B",0,10],["C",0,10]], pol:"FIFO", q:1,
+    note:"Make A 100 long. <b>The convoy effect</b>: B and C are stuck behind A, and the average turnaround jumps to 110." },
+  { n:"Fig 7.3", jobs:[["A",0,100],["B",0,10],["C",0,10]], pol:"SJF", q:1,
+    note:"The same jobs with SJF: run the short ones first. The average turnaround drops from 110 to 50." },
+  { n:"Fig 7.4", jobs:[["A",0,100],["B",10,10],["C",10,10]], pol:"SJF", q:1,
+    note:"Now B and C arrive at t=10. SJF cannot preempt: A has started, so it must finish. The convoy is back: 103.33." },
+  { n:"Fig 7.5", jobs:[["A",0,100],["B",10,10],["C",10,10]], pol:"STCF", q:1,
+    note:"The same jobs with STCF, which can preempt. When B and C arrive they take the CPU from A, and turnaround is back to the best value, 50." },
+  { n:"Fig 7.6", jobs:[["A",0,5],["B",0,5],["C",0,5]], pol:"SJF", q:1,
+    note:"Three jobs of 5. SJF's response time is 5: the third job waits for the first two to finish before it runs at all." },
+  { n:"Fig 7.7", jobs:[["A",0,5],["B",0,5],["C",0,5]], pol:"RR", q:1,
+    note:"The same jobs with RR, slice 1. Response falls from 5 to 1, but <b>turnaround rises from 10 to 14</b>. That is the trade-off." }
+];
+
+var jobs = [{n:"A",a:0,l:10},{n:"B",a:0,l:10},{n:"C",a:0,l:10}];
+var policy = "FIFO", slice = 1, note = PRESETS[0].note;
+
+/* ---------- the scheduler (same logic as code/W3/sched.c) ---------- */
+function simulate(js, pol, q){
+  var n = js.length;
+  if(!n) return { segs:[], rows:[], tt:0, rt:0, end:0 };
+  var left = js.map(function(j){ return j.l; });
+  var first = js.map(function(){ return -1; });
+  var done  = js.map(function(){ return -1; });
+  var queue = [], inq = js.map(function(){ return false; });
+  var segs = [], t = 0, cur = -1, used = 0, fin = 0, segStart = 0, segJob = -2;
+  var guard = 0, LIMIT = 100000;
+  while(fin < n && guard++ < LIMIT){
+    for(var i = 0; i < n; i++)
+      if(js[i].a === t && !inq[i]){ queue.push(i); inq[i] = true; }
+    var pick = -1;
+    if(pol === "FIFO" || pol === "SJF"){
+      if(cur >= 0 && left[cur] > 0) pick = cur;               // no preempt
+      else for(var k = 0; k < n; k++){
+        if(js[k].a > t || left[k] === 0) continue;
+        if(pick < 0){ pick = k; continue; }
+        if(pol === "FIFO" && js[k].a < js[pick].a) pick = k;
+        if(pol === "SJF"  && js[k].l < js[pick].l) pick = k;
+      }
+    } else if(pol === "STCF"){
+      for(var m = 0; m < n; m++){
+        if(js[m].a > t || left[m] === 0) continue;
+        if(pick < 0 || left[m] < left[pick]) pick = m;
+      }
+    } else {                                                   // RR
+      if(cur >= 0 && left[cur] > 0 && used < q) pick = cur;
+      else{
+        if(cur >= 0 && left[cur] > 0) queue.push(cur);
+        while(queue.length && left[queue[0]] === 0) queue.shift();
+        pick = queue.length ? queue.shift() : -1;
+        used = 0;
+      }
+    }
+    if(pick !== segJob){
+      if(segJob !== -2) segs.push({ j:segJob, s:segStart, e:t });
+      segStart = t; segJob = pick;
+    }
+    if(pick >= 0){
+      if(first[pick] < 0) first[pick] = t;
+      left[pick]--; used++;
+      if(left[pick] === 0){ done[pick] = t + 1; fin++; }
+    }
+    cur = pick; t++;
+  }
+  if(segJob !== -2) segs.push({ j:segJob, s:segStart, e:t });
+  var rows = js.map(function(j, i){
+    return { n:j.n, a:j.a, l:j.l, done:done[i], first:first[i], turn:done[i] - j.a, resp:first[i] - j.a };
+  });
+  var tt = rows.reduce(function(s2, r){ return s2 + r.turn; }, 0) / n;
+  var rt = rows.reduce(function(s2, r){ return s2 + r.resp; }, 0) / n;
+  return { segs:segs, rows:rows, tt:tt, rt:rt, end:t };
+}
+
+function drawJobs(){
+  $("jobs").innerHTML = jobs.map(function(j, i){
+    return "<div class='jrow'>" +
+      "<div class='sw' style='background:" + COLORS[i % COLORS.length] + "'>" + j.n + "</div>" +
+      "<input type='number' min='0' max='400' value='" + j.a + "' data-f='a' data-i='" + i + "'>" +
+      "<input type='number' min='1' max='400' value='" + j.l + "' data-f='l' data-i='" + i + "'>" +
+      "<button class='del' data-del='" + i + "' title='remove'>&times;</button></div>";
+  }).join("");
+  Array.prototype.forEach.call($("jobs").querySelectorAll("input"), function(inp){
+    inp.addEventListener("input", function(){
+      var i = +inp.getAttribute("data-i"), f = inp.getAttribute("data-f");
+      var v = parseInt(inp.value, 10);
+      if(isNaN(v)) return;
+      if(f === "l" && v < 1) v = 1;
+      if(f === "a" && v < 0) v = 0;
+      jobs[i][f] = v; draw();
+    });
+  });
+  Array.prototype.forEach.call($("jobs").querySelectorAll("[data-del]"), function(b){
+    b.addEventListener("click", function(){
+      if(jobs.length <= 1) return;
+      jobs.splice(+b.getAttribute("data-del"), 1);
+      jobs.forEach(function(j, k){ j.n = String.fromCharCode(65 + k); });
+      drawJobs(); draw();
+    });
+  });
+}
+
+function draw(){
+  var r = simulate(jobs, policy, slice);
+  var total = Math.max(r.end, 1);
+  $("gtitle").innerHTML = "Schedule &nbsp;<span style='color:var(--cyan);font-family:var(--mono)'>" + policy +
+    (policy === "RR" ? " (slice " + slice + ")" : "") + "</span>";
+  $("gantt").innerHTML = r.segs.map(function(s){
+    var L = (s.s / total * 100), W = ((s.e - s.s) / total * 100);
+    if(s.j < 0) return "<div class='seg2 idle' style='left:" + L + "%;width:" + W + "%'>idle</div>";
+    var lbl = jobs[s.j] ? jobs[s.j].n : "?";
+    return "<div class='seg2' style='left:" + L + "%;width:" + W + "%;background:" +
+           COLORS[s.j % COLORS.length] + "'>" + (W > 3 ? lbl : "") + "</div>";
+  }).join("");
+  var marks = [0], seen = {0:1};
+  r.segs.forEach(function(s){ if(!seen[s.e]){ marks.push(s.e); seen[s.e] = 1; } });
+  if(marks.length > 12){
+    var stepv = Math.ceil(total / 10);
+    marks = [];
+    for(var v = 0; v <= total; v += stepv) marks.push(v);
+    if(marks[marks.length - 1] !== total) marks.push(total);
+  }
+  $("axis").innerHTML = marks.map(function(m){
+    var tx = m === 0 ? "translateX(0)" : (m === total ? "translateX(-100%)" : "translateX(-50%)");
+    return "<div class='tick' style='left:" + (m / total * 100) + "%;transform:" + tx + "'>" + m + "</div>";
+  }).join("");
+  $("res").innerHTML =
+    "<tr><th>job</th><th>arrives</th><th>length</th><th>finishes</th><th>turnaround</th><th>first runs</th><th>response</th></tr>" +
+    r.rows.map(function(x, i){
+      return "<tr><td class='j' style='color:" + COLORS[i % COLORS.length] + "'>" + x.n + "</td>" +
+        "<td>" + x.a + "</td><td>" + x.l + "</td><td>" + x.done + "</td><td>" + x.turn + "</td>" +
+        "<td>" + x.first + "</td><td>" + x.resp + "</td></tr>";
+    }).join("") +
+    "<tr class='avg'><td colspan='4'>average</td><td>" + r.tt.toFixed(2) + "</td><td>-</td><td>" + r.rt.toFixed(2) + "</td></tr>";
+  var all = POLICIES.map(function(p){ var s2 = simulate(jobs, p.id, slice); return { p:p, tt:s2.tt, rt:s2.rt }; });
+  var tts = all.map(function(x){ return x.tt; }), rts = all.map(function(x){ return x.rt; });
+  var minT = Math.min.apply(null, tts), maxT = Math.max.apply(null, tts);
+  var minR = Math.min.apply(null, rts), maxR = Math.max.apply(null, rts);
+  $("cmp").innerHTML = all.map(function(x){
+    var tc = (x.tt === minT && minT !== maxT) ? "best" : ((x.tt === maxT && minT !== maxT) ? "worst" : "");
+    var rc = (x.rt === minR && minR !== maxR) ? "best" : ((x.rt === maxR && minR !== maxR) ? "worst" : "");
+    return "<div class='cmpcard' style='" + (x.p.id === policy ? "border-color:var(--cyan)" : "") + "'>" +
+      "<h4 style='color:" + (x.p.id === policy ? "var(--cyan)" : "var(--ink)") + "'>" + x.p.name +
+      "<span style='font-weight:400;font-size:11.5px;color:var(--dim)'> &nbsp;" + x.p.full + "</span></h4>" +
+      "<div class='nums'><div><span>avg turnaround</span><b class='" + tc + "'>" + x.tt.toFixed(2) + "</b></div>" +
+      "<div><span>avg response</span><b class='" + rc + "'>" + x.rt.toFixed(2) + "</b></div></div></div>";
+  }).join("");
+  $("sliceBox").style.opacity = policy === "RR" ? "1" : ".4";
+  $("msg").innerHTML = note;
+}
+
+$("pol").innerHTML = POLICIES.map(function(p){ return "<button data-p='" + p.id + "'>" + p.name + "</button>"; }).join("");
+function syncPol(){
+  Array.prototype.forEach.call($("pol").children, function(b){
+    b.setAttribute("aria-pressed", b.getAttribute("data-p") === policy ? "true" : "false");
+  });
+}
+Array.prototype.forEach.call($("pol").children, function(b){
+  b.addEventListener("click", function(){
+    policy = b.getAttribute("data-p"); syncPol();
+    note = "Switched to <b>" + policy + "</b>. Look at the four cards: green is the best for these jobs, red is the worst. " +
+           "<b>No single policy is best at both turnaround and response</b> — that is the main lesson of Chapter 7.";
+    draw();
+  });
+});
+$("slice").addEventListener("input", function(){
+  var v = parseInt($("slice").value, 10);
+  if(!isNaN(v) && v >= 1){ slice = v;
+    note = "Time slice is now <b>" + v + "</b>. A smaller slice gives better response, but more switches and more cost; " +
+           "a bigger slice gets closer to FIFO. With RR, raise it slowly from 1 and watch the two numbers trade places.";
+    draw(); }
+});
+$("add").addEventListener("click", function(){
+  if(jobs.length >= 6) return;
+  jobs.push({ n:String.fromCharCode(65 + jobs.length), a:0, l:10 });
+  drawJobs(); draw();
+});
+$("presets").innerHTML = PRESETS.map(function(p, i){ return "<button data-ps='" + i + "'>" + p.n + "</button>"; }).join("");
+Array.prototype.forEach.call($("presets").children, function(b){
+  b.addEventListener("click", function(){
+    var p = PRESETS[+b.getAttribute("data-ps")];
+    jobs = p.jobs.map(function(j){ return { n:j[0], a:j[1], l:j[2] }; });
+    policy = p.pol; slice = p.q; $("slice").value = p.q; note = "<b>" + p.n + "</b> &nbsp; " + p.note;
+    syncPol(); drawJobs(); draw();
+  });
+});
+syncPol(); drawJobs(); draw();
+</script>
+</body>
+</html>

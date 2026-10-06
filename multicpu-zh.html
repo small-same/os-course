@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>多處理器排程 一步一步看</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{--sans:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;}
+  :root{
+    --navy:#0E1B2E; --navy2:#132741; --panel:#183253; --panel2:#1d3c61;
+    --line:#284a70; --line2:#33587f;
+    --ink:#EAF1F8; --mute:#9FB6CF; --dim:#6f89a4;
+    --blue:#4A93D6; --cyan:#2DC7D8; --amber:#F2B84B; --green:#54C878; --red:#EA6B5E; --violet:#9B8CE8;
+    --mono:"IBM Plex Mono","Consolas",monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; min-height:100vh; color:var(--ink); font-family:var(--sans);
+    background:radial-gradient(1200px 700px at 50% -10%, #17304f 0%, rgba(23,48,79,0) 60%), var(--navy);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1240px; margin:0 auto; padding:clamp(16px,3vw,30px) clamp(14px,3vw,26px) 28px;
+    display:flex; flex-direction:column; gap:clamp(10px,1.8vh,16px);}
+  a{color:var(--cyan);}
+  code{font-family:var(--mono); font-size:.92em; color:var(--cyan);}
+
+  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--cyan); display:flex; align-items:center; gap:10px;}
+  .eyebrow::before{content:""; width:26px; height:2px; background:var(--cyan);}
+  h1{margin:4px 0 2px; font-weight:900; font-size:clamp(23px,3.6vw,34px); line-height:1.15;}
+  h1 span{color:var(--cyan);}
+  .sub{color:var(--mute); font-size:14px; line-height:1.6; margin:0;}
+
+  .tabs{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;}
+  .tabs button{font-family:var(--sans); font-size:13.5px; font-weight:700; color:var(--mute);
+    background:var(--navy2); border:1px solid var(--line); border-radius:999px;
+    padding:8px 16px; cursor:pointer; transition:.18s;}
+  .tabs button:hover{color:var(--ink); border-color:var(--line2);}
+  .tabs button[aria-selected="true"]{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+
+  .stage{background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.45));
+    border:1px solid var(--line); border-radius:16px; padding:clamp(14px,2.4vw,24px);}
+  .stagehead{display:flex; justify-content:space-between; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:14px;}
+  .stagehead h2{margin:0; font-size:clamp(17px,2.4vw,21px); font-weight:700;}
+  .stagehead .note{font-size:12.5px; color:var(--dim); font-family:var(--mono);}
+
+  .cols{display:grid; gap:14px; grid-template-columns:1fr 1fr;}
+  .cols.wide{grid-template-columns:1.55fr 1fr;}
+  .cols.side{grid-template-columns:330px 1fr;}
+  @media(max-width:960px){.cols,.cols.wide,.cols.side{grid-template-columns:1fr;}}
+
+  .box{background:var(--navy); border:1px solid var(--line); border-radius:12px; padding:14px 16px; min-width:0;}
+  #body > * + *{margin-top:14px;}
+  .box h3{margin:0 0 10px; font-size:13px; letter-spacing:.06em; color:var(--mute); font-weight:700;
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .hint{font-size:12px; color:var(--dim); line-height:1.55;}
+
+  .msg{margin-top:12px; border-left:3px solid var(--cyan); background:rgba(45,199,216,.07);
+    padding:11px 14px; border-radius:0 9px 9px 0; font-size:14px; line-height:1.7; min-height:62px;}
+  .msg.bad{border-left-color:var(--red); background:rgba(234,107,94,.08);}
+  .msg b{color:var(--cyan);} .msg.bad b{color:var(--red);}
+
+  button{font-family:var(--sans); cursor:pointer;}
+  .ctl{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px;}
+  .ctl button,.btn{font-family:var(--sans); font-size:13px; font-weight:700; color:var(--ink);
+    background:var(--panel); border:1px solid var(--line2); border-radius:9px; padding:8px 15px; transition:.16s;}
+  .ctl button:hover:not(:disabled),.btn:hover:not(:disabled){background:var(--panel2); border-color:var(--cyan);}
+  .ctl button:disabled,.btn:disabled{opacity:.35; cursor:default;}
+  .ctl .prim,.btn.prim{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+  .ctl .prim:hover:not(:disabled),.btn.prim:hover:not(:disabled){background:#51d8e6;}
+  .btn.sm{font-size:12px; padding:6px 11px;}
+  .ctl .voice[aria-pressed="true"]{background:var(--amber); border-color:var(--amber); color:#2a1d00;}
+  .dots{display:flex; gap:6px; margin-left:auto; flex-wrap:wrap;}
+  .dots i{width:8px; height:8px; border-radius:50%; background:var(--line2); cursor:pointer; transition:.2s;}
+  .dots i.on{background:var(--cyan); transform:scale(1.25);}
+
+  .seg{display:inline-flex; flex-wrap:wrap; border:1px solid var(--line2); border-radius:9px; overflow:hidden;}
+  .seg button{border:0; border-radius:0; background:var(--navy2); color:var(--mute); padding:7px 13px;
+    font-size:12.5px; font-weight:700;}
+  .seg button:hover{color:var(--ink);}
+  .seg button[aria-pressed="true"]{background:var(--amber); color:#2a1d00;}
+  .chips{display:flex; flex-wrap:wrap; gap:6px;}
+  .chips button{font-size:12px; font-family:var(--sans); background:var(--navy2); color:var(--mute);
+    border:1px solid var(--line); border-radius:7px; padding:6px 10px; font-weight:600;}
+  .chips button:hover{color:var(--cyan); border-color:var(--cyan);}
+  .chips button[aria-pressed="true"]{color:#06202c; background:var(--cyan); border-color:var(--cyan);}
+
+  .field{display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--mute);}
+  input[type=number],select{background:var(--navy2); border:1px solid var(--line); border-radius:7px;
+    color:var(--ink); font-family:var(--mono); font-size:13px; padding:6px 8px; text-align:center;}
+  input[type=number]{width:66px;}
+  input[type=number]:focus,select:focus{outline:none; border-color:var(--cyan);}
+  input[type=range]{accent-color:var(--cyan);}
+
+  table.r{width:100%; border-collapse:collapse; font-size:13px;}
+  table.r th,table.r td{border:1px solid var(--line); padding:7px 9px; text-align:center;}
+  table.r th{background:var(--panel); color:var(--mute); font-size:11.5px; font-weight:700;}
+  table.r td{font-family:var(--mono);}
+  table.r tr.hl td{background:rgba(45,199,216,.12);}
+
+  .term{background:#08131f; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+    font-family:var(--mono); font-size:12.5px; line-height:1.65; color:#cfe3f5; white-space:pre-wrap;}
+
+  .job{display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:24px; padding:0 6px;
+    border-radius:6px; font-weight:700; font-size:12.5px; color:#02121f; font-family:var(--mono);}
+
+  footer{color:var(--dim); font-family:var(--mono); font-size:11.5px; line-height:1.7; margin-top:6px;}
+  .kbd{font-family:var(--mono); font-size:11px; background:var(--panel); border:1px solid var(--line2);
+    border-radius:5px; padding:1px 6px; color:var(--mute);}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important;}}
+
+  /* ---- 快取一致性 ---- */
+  .hw{display:grid; grid-template-columns:1fr 1fr; gap:18px 28px; align-items:start;}
+  .cpu{border:1px solid var(--line2); border-radius:12px; background:var(--navy2); padding:12px 14px; min-height:150px; position:relative; transition:.25s;}
+  .cpu.here{border-color:var(--cyan); box-shadow:0 0 0 1px rgba(45,199,216,.35);}
+  .cpu .nm{font-weight:900; font-size:15px; display:flex; justify-content:space-between; align-items:center;}
+  .prog{font-size:12px; font-weight:700; color:#06202c; background:var(--cyan); border-radius:999px; padding:3px 10px;}
+  .cache{margin-top:12px; border:1px dashed var(--line2); border-radius:9px; padding:9px 11px; font-family:var(--mono); font-size:13px; min-height:52px;}
+  .cache .lbl{font-family:var(--sans); font-size:11.5px; color:var(--dim); margin-bottom:4px;}
+  .cv{display:inline-flex; gap:8px; align-items:center;}
+  .st{font-family:var(--sans); font-size:11px; border-radius:6px; padding:2px 7px; font-weight:700;}
+  .st.v{background:rgba(84,200,120,.18); color:var(--green);}
+  .st.m{background:rgba(242,184,75,.2); color:var(--amber);}
+  .st.i{background:rgba(234,107,94,.18); color:var(--red);}
+  .cv.inv span:first-child{text-decoration:line-through; text-decoration-color:var(--red); color:var(--dim);}
+  .bus{grid-column:1 / -1; border-radius:9px; background:#22476e; padding:9px 14px; font-size:13px; text-align:center; min-height:40px;
+    display:flex; align-items:center; justify-content:center; gap:10px;}
+  .bus b{font-family:var(--mono); color:var(--mute); font-size:11.5px; letter-spacing:.12em;}
+  .mem{grid-column:1 / -1; justify-self:center; min-width:280px; border:1px solid var(--line2); border-radius:11px; background:var(--panel); padding:11px 16px; text-align:center;}
+  .mem .nm{font-weight:900; font-size:14px;}
+  .mem .val{font-family:var(--mono); font-size:15px; margin-top:4px;}
+  .readres{margin-top:12px; font-size:14px; font-weight:700; text-align:center;}
+
+  /* ---- List_Pop ---- */
+  .code{background:#08131f; border:1px solid var(--line); border-radius:10px; padding:10px 0; font-family:var(--mono); font-size:12.5px; line-height:1.9;}
+  .code .ln{display:grid; grid-template-columns:62px 1fr; padding:0 12px 0 0; white-space:pre; color:#cfe3f5;}
+  .code .ln .mk{display:flex; gap:3px; justify-content:flex-end; padding-right:8px; align-items:center;}
+  .code .ln .mk span{font-size:10.5px; font-weight:700; border-radius:5px; padding:0 5px; line-height:18px; color:#02121f;}
+  .code .ln.lockln{color:var(--amber);}
+  .code .ln .cm{color:#7C93AB; font-style:italic;}
+  .list{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:6px 0;}
+  .arrow{color:var(--dim); font-family:var(--mono); font-size:13px;}
+  .node{border:1px solid var(--line2); border-radius:9px; padding:8px 10px; background:var(--navy2); text-align:center; min-width:76px; transition:.25s;}
+  .node .v{font-family:var(--mono); font-weight:700; font-size:16px;}
+  .node .s{font-size:10.5px; color:var(--dim); margin-top:2px; min-height:14px;}
+  .node.head{border-color:var(--cyan);}
+  .node.freed{opacity:.55;}
+  .node.dbl{border-color:var(--red); background:rgba(234,107,94,.16); opacity:1;}
+  .node.dbl .s{color:var(--red); font-weight:700;}
+  .node.lost{border-style:dashed; border-color:var(--amber); opacity:1;}
+  .node.lost .s{color:var(--amber); font-weight:700;}
+  .thr{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;}
+  .tc{border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--navy2); font-family:var(--mono); font-size:12.5px; line-height:1.7;}
+  .tc .h{font-family:var(--sans); font-weight:900; font-size:14px; margin-bottom:4px; display:flex; justify-content:space-between;}
+  .tc .wait{color:var(--amber); font-family:var(--sans); font-size:12px;}
+  .btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;}
+
+  /* ---- 親和度 ---- */
+  .two{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .heat{display:grid; grid-template-columns:repeat(16,1fr); gap:3px; margin-top:10px;}
+  .heat i{height:14px; border-radius:3px; background:#1b2c42; transition:background .35s;}
+  .heat.warm i{background:var(--cyan);}
+  .rounds{display:flex; gap:3px; align-items:flex-end; flex-wrap:wrap; min-height:56px; margin-top:8px;}
+  .rounds div{width:30px; border-radius:4px 4px 0 0; font-family:var(--mono); font-size:9.5px; color:#02121f; text-align:center; font-weight:700;}
+  .tot{display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-family:var(--mono); font-size:13px;}
+
+  /* ---- 排程格子 ---- */
+  .grid{display:flex; flex-direction:column; gap:6px; overflow-x:auto;}
+  .grow{display:flex; gap:4px; align-items:center;}
+  .grow .lbl{width:58px; flex:none; font-family:var(--mono); font-size:12.5px; color:var(--mute); text-align:right; padding-right:6px;}
+  .cell{width:38px; height:34px; flex:none; border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:var(--mono);
+    font-weight:700; font-size:13px; color:#02121f; position:relative; animation:pop .3s ease both;}
+  .cell.idle{background:#1b2c42; color:var(--dim); font-weight:400;}
+  .cell .ev{position:absolute; top:-9px; right:-3px; font-size:11px; color:var(--amber);}
+  .cell .pk{position:absolute; bottom:-8px; left:50%; transform:translateX(-50%); width:5px; height:5px; border-radius:50%; background:var(--mute);}
+  .cell.phase{margin-left:10px;}
+  @keyframes pop{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+  .gaxis{display:flex; gap:4px; margin-left:62px; font-family:var(--mono); font-size:10px; color:var(--dim);}
+  .gaxis span{width:38px; text-align:center; flex:none;}
+  .stats{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; font-family:var(--mono); font-size:12.5px;}
+  .stats div{background:var(--navy2); border:1px solid var(--line); border-radius:8px; padding:6px 10px;}
+  .stats div span{color:var(--dim); font-family:var(--sans); font-size:11.5px; margin-right:5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">OSTEP 第 10 章 · 第 4 週</div>
+  <h1><span>多處理器排程</span>　快取、鎖、佇列</h1>
+  <p class="sub">CPU 不只一顆以後，排程多了新問題：快取裡的資料要一致、共用資料要上鎖、行程最好留在原來的 CPU、每顆 CPU 都要有事做。五個小實驗一個一個看。</p>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="stage">
+    <div class="stagehead"><h2 id="ttl"></h2><div class="note" id="note"></div></div>
+    <div id="body"></div>
+    <div class="msg" id="msg"></div>
+    <div class="ctl">
+      <button id="prev">← 上一步</button>
+      <button id="next" class="prim">下一步 →</button>
+      <button id="play">▶ 自動播放</button>
+      <button id="reset">重來</button>
+      <button id="voice" class="voice" aria-pressed="false">🔈 朗讀：關</button>
+      <span id="extra"></span>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+  <footer>鍵盤：<span class="kbd">←</span> <span class="kbd">→</span> 逐步　·　<span class="kbd">空白鍵</span> 自動播放　·　<span class="kbd">R</span> 重來<br>對應課程檔案 <code>code/W4/coherence.c</code>、<code>list_race.c</code>、<code>affinity.c</code>、<code>multiq.c</code>；教材：OSTEP 第 10 章<br>樹德科技大學 資訊工程系　·　作業系統</footer>
+</div>
+<script>
+"use strict";
+var T = {"title":"多處理器排程 一步一步看","eyebrow":"OSTEP 第 10 章 · 第 4 週","h1":"<span>多處理器排程<\/span>　快取、鎖、佇列","sub":"CPU 不只一顆以後，排程多了新問題：快取裡的資料要一致、共用資料要上鎖、行程最好留在原來的 CPU、每顆 CPU 都要有事做。五個小實驗一個一個看。","footer":"對應課程檔案 <code>code/W4/coherence.c<\/code>、<code>list_race.c<\/code>、<code>affinity.c<\/code>、<code>multiq.c<\/code>；教材：OSTEP 第 10 章","tabs":["① 快取一致性","② List_Pop 競爭","③ 快取親和度","④ 單佇列 vs 多佇列","⑤ 工作竊取"],"tabTtl":["圖 10.2：兩顆 CPU 共用記憶體，資料會不一致","圖 10.3：兩顆 CPU 同時 List_Pop，會發生什麼事","換一顆 CPU 跑，快取就得重新暖身","SQMS 與 MQMS：工作怎麼分給每顆 CPU","工作竊取：多久偷看一次別人的佇列"],"tabNote":["OSTEP §10.1","OSTEP §10.2","OSTEP §10.3","OSTEP §10.4–10.5","OSTEP §10.5"],"coh":{"cache":"快取","emptyCache":"（沒有 A）","valid":"有效","modified":"已修改","invalid":"作廢","prog":"程式在這裡","figTitle":"圖 10.2　兩顆 CPU、各自的快取、同一個記憶體","quiet":"（匯流排上沒有動靜）","memory":"記憶體","notesTitle":"怎麼看","modePlain":"課本的例子（沒有一致性）","modeSnoop":"匯流排監聽","plainNote":"快取裡的標籤：<br><b>有效<\/b>：和最新的值一樣。<br><b>已修改<\/b>：這個快取改過了，記憶體裡還是舊的。<br><b>作廢<\/b>：這份副本不能再用。<br><br>沒有一致性機制的時候，每個快取只管自己，別的 CPU 改了什麼，它不知道。","snoopNote":"<b>匯流排監聽<\/b>：每個快取都一直盯著匯流排。<br>· 看到別人要<b>寫<\/b>自己也有的資料 → 把自己的副本作廢。<br>· 看到別人要<b>讀<\/b>自己改過的資料 → 把新的值交出來。<br><br>這些全由硬體自動完成，程式和 OS 都不用管。","plainSteps":[{"prog":1,"c1":null,"c2":null,"mem":"D","bus":"","msg":"這是<b>圖 10.2<\/b>：兩顆 CPU 各有自己的快取，透過匯流排接到同一個記憶體。記憶體裡位址 A 的值是 <b>D<\/b>，程式正在 CPU 1 上跑。按「下一步」跟著課本的例子走。"},{"prog":1,"c1":{"v":"D","st":"v"},"c2":null,"mem":"D","bus":"CPU 1：讀 A → 記憶體送來 D","msg":"<b>第 1 步<\/b>　程式在 CPU 1 上讀位址 A。快取 1 裡還沒有，就從記憶體拿，拿到 D，並在快取 1 留一份副本。"},{"prog":1,"c1":{"v":"D'","st":"m"},"c2":null,"mem":"D","bus":"（沒有動靜：新的值只寫進快取 1）","msg":"<b>第 2 步<\/b>　程式把 A 改成 <b>D'<\/b>。新的值只寫進快取 1；一路寫回記憶體很慢，硬體通常晚一點才做。所以現在記憶體裡還是舊的 D。"},{"prog":2,"c1":{"v":"D'","st":"m"},"c2":null,"mem":"D","bus":"","msg":"<b>第 3 步<\/b>　OS 讓程式停下來，把它搬到 <b>CPU 2<\/b> 上繼續跑。"},{"prog":2,"c1":{"v":"D'","st":"m"},"c2":{"v":"D","st":"v"},"mem":"D","bus":"CPU 2：讀 A → 記憶體送來 D（舊的！）","bad":true,"read":{"ok":false,"text":"程式讀到 D，而不是 D' ✗"},"msg":"<b>第 4 步<\/b>　程式再讀一次 A。快取 2 沒有，只好從記憶體拿——拿到的是<b>舊的 D<\/b>，不是剛剛寫進去的 D'。答案錯了！"},{"prog":2,"c1":{"v":"D'","st":"m"},"c2":{"v":"D","st":"v"},"mem":"D","bus":"","bad":true,"read":{"ok":false,"text":"兩份副本不一樣：快取 1 是 D'，快取 2 是 D"},"msg":"每顆 CPU 都有自己的一份副本，副本之間可能不一致：這就是<b>快取一致性 (cache coherence) 問題<\/b>。解法由硬體提供。按下面的「匯流排監聽」，看硬體怎麼讓答案變對。"}],"snoopSteps":[{"prog":1,"c1":null,"c2":null,"mem":"D","bus":"","msg":"這次硬體會做<b>匯流排監聽 (bus snooping)<\/b>：每個快取都一直盯著匯流排上的動靜。同一個例子，再走一次。"},{"prog":1,"c1":{"v":"D","st":"v"},"c2":null,"mem":"D","bus":"CPU 1：讀 A → 記憶體送來 D","msg":"<b>第 1 步<\/b>　和剛才一樣：CPU 1 讀 A，從記憶體拿到 D，快取 1 留一份副本。"},{"prog":1,"c1":{"v":"D'","st":"m"},"c2":null,"mem":"D","bus":"CPU 1：我要改 A（有 A 副本的快取請作廢）","msg":"<b>第 2 步<\/b>　程式把 A 改成 D'。這次 CPU 1 會在匯流排上宣告「我要改 A」；別的快取如果有 A 的副本，聽到就會作廢。現在 CPU 2 沒有副本，所以沒有影響。"},{"prog":2,"c1":{"v":"D'","st":"m"},"c2":null,"mem":"D","bus":"","msg":"<b>第 3 步<\/b>　OS 一樣把程式搬到 <b>CPU 2<\/b>。"},{"prog":2,"c1":{"v":"D'","st":"v"},"c2":{"v":"D'","st":"v"},"mem":"D'","bus":"CPU 2：讀 A → 快取 1 聽到了：「我有較新的 D'，給你」","read":{"ok":true,"text":"程式讀到 D' ✓"},"msg":"<b>第 4 步<\/b>　CPU 2 在匯流排上要讀 A。快取 1 一直在監聽，發現自己手上有較新的 D'，就把 D' 交出來，也順便寫回記憶體。程式拿到正確的 <b>D'<\/b>。"},{"prog":2,"c1":{"v":"D'","st":"i"},"c2":{"v":"D''","st":"m"},"mem":"D'","bus":"CPU 2：我要改 A → 快取 1 聽到，作廢自己的副本","msg":"<b>第 5 步<\/b>　程式在 CPU 2 上把 A 改成 <b>D''<\/b>。CPU 2 在匯流排上宣告，快取 1 聽到後把自己那一份<b>作廢 (invalidate)<\/b>。之後 CPU 1 要用 A，就得重新拿最新的值，不會再用到舊的。"},{"prog":2,"c1":{"v":"D'","st":"i"},"c2":{"v":"D''","st":"m"},"mem":"D'","bus":"","msg":"這就是<b>匯流排監聽<\/b>：每個快取都盯著匯流排，看到別人改了自己也有的資料，就作廢或更新自己的副本。一致性由硬體保證——但不是免費的：資料在快取之間搬來搬去要花時間（code/W4/coherence.c 實測：兩個核心搶同一條快取線，慢了約 5 倍）。"}]},"race":{"codeTitle":"圖 10.3　List_Pop：拿掉串列的第一個節點","withLock":"（上鎖版本）","codeNote":"T1▶、T2▶ 標出每個執行緒下一步要執行的那一行。","doneLbl":"已經 return：","listTitle":"共用的串列，以及兩個執行緒各自的變數","step1":"T1 執行一行","step2":"T2 執行一行","playBad":"▶ 播放：兩個交錯執行","playGood":"▶ 播放：一個做完再換另一個","noLock":"不上鎖（圖 10.3）","lockBtn":"上鎖 lock / unlock","waiting":"在等鎖……","returned":"回傳","sDbl":"free 兩次！","sFreed":"已 free","sLost":"沒人拿到","intro":"兩個執行緒在兩顆 CPU 上，同時從同一條串列 pop。按「T1 執行一行」「T2 執行一行」自己決定誰先跑，或按「播放：兩個交錯執行」。正確的話，T1、T2 會拿到不同的節點，每個節點只 free 一次。","introLock":"加上鎖：List_Pop 開頭 lock、結尾 unlock。再試一次交錯執行：一個執行緒拿到鎖之後，另一個只能停在 lock 那一行等。","already":"%t 已經 return 了。","waitLock":"%t 想拿鎖，但鎖在 %o 手上——%t 只能停在 lock 這一行等。","gotLock":"%t 拿到鎖，進入 List_Pop。","unlocked":"%t 放開鎖。","tmpNull":"%t：head 是 NULL，串列已經空了。","tmp":"%t：tmp = head，指向節點 %v。","valNull":"%t：head 已經是 NULL，讀 head->value 程式會當掉！","val":"%t：value = head->value = %v。","valOther":"注意：這個執行緒的 tmp 指向 %a，但 head 已經被另一個執行緒移走了，所以讀到的是 %b。","adv":"%t：head = head->next，head 現在指向 %v。","skip":"節點 %v 被跳過了：它已經不在串列上，卻沒有人拿到它。","freeNull":"%t：tmp 是 NULL，沒有東西可以 free。","dbl":"%t：free(tmp)——節點 %v <b>已經被 free 過了<\/b>！同一個節點被 free 兩次。","free":"%t：free(tmp)，釋放節點 %v。","ret":"%t：return %v。","same":"<b>兩個執行緒都回傳了 %v！<\/b>","sumBad":"<b>結果出錯<\/b>：兩個執行緒在同一瞬間讀到同一個 head。","sumLost":"節點 %v 從串列上消失，卻沒有人拿到它，也沒有被 free。","sumGood":"<b>結果正確<\/b>：T1 拿到 %a、T2 拿到 %b，每個節點只 free 一次。"},"aff":{"title":"行程 P 的資料（16 KB）在哪顆 CPU 的快取裡","warm":"快取裡有 P 的資料（熱的）","cold":"快取裡沒有 P 的資料（冷的）","run0":"P 在 CPU 0 跑一輪","run1":"P 在 CPU 1 跑一輪","stay":"▶ 一直留在 CPU 0（10 輪）","hop":"▶ 每輪換 CPU（10 輪）","roundsTitle":"每一輪花的時間（綠 = 快取裡有資料；紅 = 要從別的核心搬過來；柱子上是 CPU 編號）","none":"還沒跑","total":"%n 輪，共 %t 微秒","measTitle":"實測（code/W4/affinity.c）","meas":"$ ./affinity\n情況 1　一直留在 CPU 0 上：\n  每輪 0.30 微秒（每格 1.2 奈秒）\n情況 2　每輪在 CPU 0、CPU 2 之間換：\n  每輪 1.50 微秒（每格 5.9 奈秒）\n  慢 5.0 倍","measNote":"這一頁用的就是這兩個實測數字：快取裡有資料 0.30 微秒、沒有 1.50 微秒。每台電腦、每次跑的數字都不一樣，看的是差幾倍。","intro":"行程 P 反覆讀寫同一塊 16 KB 的資料。它在哪顆 CPU 上跑，資料就被搬進那顆 CPU 的快取。按「P 在 CPU 0 跑一輪」幾次，再按「P 在 CPU 1 跑一輪」，看每一輪的時間；或直接比較下面兩種自動跑法。","hit":"P 在 CPU %c 上跑，資料還在 CPU %c 的快取裡：這一輪只要 0.30 微秒。","miss":"P 在 CPU %c 上跑，可是 CPU %c 的快取裡沒有它的資料，每一格都得從別處搬過來：這一輪要 1.50 微秒。","stayMsg":"一直留在 CPU 0：只有第一輪是冷的，之後每輪都很快，10 輪共 <b>%t 微秒<\/b>。這就是<b>快取親和度<\/b>：讓行程留在原來那顆 CPU。","hopMsg":"每輪換一顆 CPU：每一輪都撲空，10 輪共 <b>%t 微秒<\/b>，是留在原處的三倍多。所以多處理器的排程器會盡量不要把行程搬來搬去。"},"q":{"cells":"各工作拿到的格數","moves":"換 CPU 的次數","idle":"閒置格數","steps":[{"title":"SQMS：大家共用一條佇列","queues":"佇列：A B C D E　·　4 顆 CPU　·　一格 = 一個時間片","bad":true,"msg":"<b>單佇列 (SQMS)<\/b>：5 個工作、4 顆 CPU，每個時間片每顆 CPU 都從同一條佇列拿下一個。看 A：先在 CPU 0 跑，接著到 CPU 1、CPU 2、CPU 3——<b>每個工作都一直換 CPU<\/b>，每次到的那顆 CPU，快取裡都沒有它的資料。而且所有 CPU 共用一條佇列，還得上鎖，CPU 越多搶得越兇。"},{"title":"SQMS 加上親和度","queues":"A～D 固定在自己的 CPU，只有 E 在搬","msg":"大多數 SQMS 會加上<b>親和度機制<\/b>：A、B、C、D 各自固定在自己的 CPU，只有 E 到處補空檔。五個工作拿到的時間一樣多（各 8 格），但只有 E 在換 CPU。這樣可行，只是實作起來很複雜。"},{"title":"MQMS：每顆 CPU 一條佇列","queues":"Q0 = A C　·　Q1 = B D　·　時間片 = 2 格","msg":"<b>多佇列 (MQMS)<\/b>：每顆 CPU 有自己的佇列，各自輪轉，每個工作每次跑 2 格。工作一直留在同一顆 CPU 上，<b>親和度好<\/b>；CPU 不用搶同一把鎖，<b>擴充性好<\/b>。"},{"title":"C 做完了","queues":"Q0 = A　·　Q1 = B D","bad":true,"msg":"問題來了：<b>負載不均<\/b>。C 做完之後，A 獨佔 CPU 0，B 和 D 要分 CPU 1——A 拿到 12 格，B、D 各 6 格，A 是它們的兩倍。"},{"title":"A、C 都做完了","queues":"Q0 =（空）　·　Q1 = B D","bad":true,"msg":"更糟：A 也做完了。<b>CPU 0 整個閒著<\/b>，另一顆 CPU 上卻有兩個工作在排隊，等於一半的電腦浪費掉。"},{"title":"遷移：不斷搬動工作","queues":"從 Q0 = A、Q1 = B D 開始，每 4 格調整一次","msg":"解法是<b>遷移 (migration)<\/b>。搬一次不夠，要一直搬：第 5 格起 B 搬到 CPU 0 和 A 輪流，D 獨享 CPU 1；第 9 格起換 A 搬到 CPU 1。A、B、D 各拿 8 格，一樣多。至於什麼時候該搬，常見的做法是<b>工作竊取<\/b>——看下一個分頁。"}]},"ws":{"gridTitle":"兩顆 CPU 的時間軸（格子裡是工作編號）","pLbl":"偷看間隔","nLbl":"工作數","lLbl":"每個工作長度","every":"每 %p 格","never":"不偷看","peeks":"偷看次數","idle":"CPU 閒置格數","finish":"全部做完的時間","legend":"工作一開始全排在 CPU 0 的佇列。小圓點 = 這一格有 CPU 去偷看別人的佇列；▼ = 偷到一個工作。和 code/W4/multiq.c 第 7 部分同一套規則。","tableTitle":"不同的偷看間隔比一比","cols":["偷看間隔","偷看次數","閒置格數","做完時間"],"msgP":"每 %p 格偷看一次：偷看 <b>%k 次<\/b>，CPU 閒置 <b>%i 格<\/b>，第 <b>%f 格<\/b>全部做完。看得越勤，偷看本身的開銷越大；看得越少，CPU 閒得越久、越晚做完。P 要設多少沒有標準答案——課本說這是一種「黑魔法」。","msgNever":"完全不偷看：CPU 1 從頭閒到尾（閒置 <b>%i 格<\/b>），所有工作擠在 CPU 0，要到第 <b>%f 格<\/b>才做完。這就是負載不均。"},"ui":{"htmlLang":"zh-Hant","fonts":"<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap\">","sans":"\"Noto Sans TC\",\"Microsoft JhengHei\",\"PingFang TC\",sans-serif","prev":"← 上一步","next":"下一步 →","play":"▶ 自動播放","pause":"❚❚ 暫停","reset":"重來","voiceOff":"🔈 朗讀：關","voiceOn":"🔊 朗讀：開","noVoice":"這台電腦沒有中文語音","voiceLang":"zh-TW","voiceRate":1,"msPerChar":190,"keys":"鍵盤：<span class=\"kbd\">←<\/span> <span class=\"kbd\">→<\/span> 逐步　·　<span class=\"kbd\">空白鍵<\/span> 自動播放　·　<span class=\"kbd\">R<\/span> 重來","colon":"：","listSep":"、","school":"樹德科技大學 資訊工程系　·　作業系統"}};
+/* ===== 共用引擎：分頁、逐步、自動播放、朗讀（W4 三頁共用） ===== */
+var $ = function(id){ return document.getElementById(id); };
+var esc = function(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+var each = function(list, fn){ Array.prototype.forEach.call(list, fn); };
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+var JOBCOLOR = { A:"#4A93D6", B:"#F2B84B", C:"#2DC7D8", D:"#54C878", E:"#9B8CE8" };
+function jobChip(name, extra){ return "<span class='job' style='background:" + (JOBCOLOR[name] || "#9FB6CF") + "'" + (extra || "") + ">" + name + "</span>"; }
+function pct(part, whole){ return whole ? Math.round(1000 * part / whole) / 10 : 0; }
+function fill(s, map){ return String(s).replace(/%(\w+)/g, function(m, k){ return Object.prototype.hasOwnProperty.call(map, k) ? map[k] : m; }); }
+
+var TABS = [], tab = 0, step = 0;
+var playing = false, playTimer = null;
+var speech = { ok:("speechSynthesis" in window), on:false, voice:null, last:"", token:0 };
+
+function setMsg(html, bad){ var m = $("msg"); m.className = "msg" + (bad ? " bad" : ""); m.innerHTML = html; }
+function setExtra(html){ $("extra").innerHTML = html; }
+
+function render(){
+  var tb = TABS[tab];
+  var n = tb.stepped ? tb.len() : 1;
+  if(step > n - 1) step = n - 1;
+  if(step < 0) step = 0;
+  $("ttl").innerHTML = tb.ttl;
+  $("note").textContent = tb.note || "";
+  setExtra("");
+  tb.render(step);
+  $("prev").disabled = !tb.stepped || step === 0;
+  $("next").disabled = !tb.stepped || step >= n - 1;
+  ["prev", "next", "reset", "play"].forEach(function(id){ $(id).style.display = tb.stepped ? "" : "none"; });
+  $("play").textContent = playing ? T.ui.pause : T.ui.play;
+  $("dots").innerHTML = tb.stepped
+    ? Array.apply(null, Array(n)).map(function(_, i){ return "<i class='" + (i === step ? "on" : "") + "' data-d='" + i + "'></i>"; }).join("")
+    : "";
+  each($("dots").querySelectorAll("[data-d]"), function(d){
+    d.addEventListener("click", function(){ stopPlay(); step = +d.getAttribute("data-d"); render(); });
+  });
+  each($("tabs").children, function(b, i){ b.setAttribute("aria-selected", i === tab ? "true" : "false"); });
+  try { history.replaceState(null, "", "#tab=" + (tab + 1) + (tb.stepped ? "&step=" + (step + 1) : "")); } catch(e) {}
+  if(tb.stepped) narrate();
+}
+function readHash(){                                  // 網址 #tab=2&step=4 可以直接打開某一頁的某一步
+  var m = /tab=(\d+)/.exec(location.hash || ""), k = /step=(\d+)/.exec(location.hash || "");
+  if(m && +m[1] >= 1 && +m[1] <= TABS.length) tab = +m[1] - 1;
+  if(k && +k[1] >= 1) step = +k[1] - 1;
+}
+
+/* ---------- 朗讀：用瀏覽器內建的語音（Windows 有中文語音 Hanhan / Yating / Zhiwei） ---------- */
+function pickVoice(){
+  if(!speech.ok) { $("voice").style.display = "none"; return; }
+  var vs = window.speechSynthesis.getVoices() || [];
+  var want = T.ui.voiceLang.toLowerCase(), pre = want.split("-")[0];
+  var norm = function(v){ return (v.lang || "").toLowerCase().replace("_", "-"); };
+  var exact = vs.filter(function(v){ return norm(v) === want; });
+  var loose = vs.filter(function(v){ return norm(v).indexOf(pre) === 0; });
+  speech.voice = exact[0] || loose[0] || null;
+  $("voice").disabled = !speech.voice;
+  $("voice").title = speech.voice ? speech.voice.name : T.ui.noVoice;
+}
+function chunks(text){
+  var parts = text.match(/[^\u3002\uff01\uff1f\uff1b.!?;]+[\u3002\uff01\uff1f\uff1b.!?;]*/g) || [text], out = [], buf = "";
+  parts.forEach(function(p){
+    if((buf + p).length > 150 && buf){ out.push(buf); buf = p; } else buf += p;
+  });
+  if(buf.trim()) out.push(buf);
+  return out;
+}
+function speakNow(text, done){
+  var my = ++speech.token;
+  window.speechSynthesis.cancel();
+  var parts = chunks(text), i = 0;
+  (function next(){
+    if(my !== speech.token) return;
+    if(i >= parts.length){ if(done) done(); return; }
+    var u = new SpeechSynthesisUtterance(parts[i++]);
+    u.voice = speech.voice; u.lang = speech.voice.lang; u.rate = T.ui.voiceRate;
+    u.onend = next;
+    u.onerror = function(){ if(my === speech.token && done) done(); };
+    window.speechSynthesis.speak(u);
+  })();
+}
+function msgText(){ return ($("msg").textContent || "").replace(/\s+/g, " ").trim(); }
+function narrate(){
+  var text = msgText();
+  if(playing){
+    clearTimeout(playTimer);
+    var go = function(){ if(playing) playTimer = setTimeout(advance, 650); };
+    if(speech.on && speech.voice) speakNow(text, go);
+    else playTimer = setTimeout(advance, Math.min(16000, Math.max(2400, text.length * T.ui.msPerChar)));
+    speech.last = text;
+    return;
+  }
+  if(speech.on && speech.voice && text && text !== speech.last){ speech.last = text; speakNow(text, null); }
+}
+function sayMsg(){                                  // 互動頁面：換了例子才唸，拉滑桿時不唸
+  if(speech.on && speech.voice){ speech.last = msgText(); speakNow(speech.last, null); }
+}
+function stopSpeech(){ speech.token++; if(speech.ok) window.speechSynthesis.cancel(); }
+function advance(){
+  var tb = TABS[tab];
+  if(!tb.stepped || step >= tb.len() - 1){ stopPlay(); return; }
+  step++; render();
+}
+function stopPlay(){ playing = false; clearTimeout(playTimer); $("play").textContent = T.ui.play; }
+function togglePlay(){
+  if(!TABS[tab].stepped) return;
+  if(playing){ stopPlay(); stopSpeech(); return; }
+  playing = true;
+  if(step >= TABS[tab].len() - 1) step = 0;
+  render();
+}
+
+function startEngine(tabs){
+  TABS = tabs;
+  $("tabs").innerHTML = TABS.map(function(t){ return "<button role='tab'>" + t.name + "</button>"; }).join("");
+  each($("tabs").children, function(b, i){
+    b.addEventListener("click", function(){ stopPlay(); stopSpeech(); speech.last = ""; tab = i; step = 0; if(TABS[i].enter) TABS[i].enter(); render(); });
+  });
+  $("prev").addEventListener("click", function(){ stopPlay(); if(step > 0){ step--; render(); } });
+  $("next").addEventListener("click", function(){ stopPlay(); if(step < TABS[tab].len() - 1){ step++; render(); } });
+  $("reset").addEventListener("click", function(){ stopPlay(); step = 0; render(); });
+  $("play").addEventListener("click", togglePlay);
+  $("voice").addEventListener("click", function(){
+    speech.on = !speech.on;
+    $("voice").setAttribute("aria-pressed", speech.on ? "true" : "false");
+    $("voice").textContent = speech.on ? T.ui.voiceOn : T.ui.voiceOff;
+    if(speech.on){ speech.last = ""; if(TABS[tab].stepped && !playing) narrate(); else sayMsg(); }
+    else stopSpeech();
+  });
+  document.addEventListener("keydown", function(e){
+    var tag = (e.target && e.target.tagName) || "";
+    if(tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if(e.key === "ArrowLeft"){ stopPlay(); if(step > 0){ step--; render(); } }
+    else if(e.key === "ArrowRight"){ stopPlay(); if(TABS[tab].stepped && step < TABS[tab].len() - 1){ step++; render(); } }
+    else if(e.key === "r" || e.key === "R"){ stopPlay(); step = 0; render(); }
+    else if(e.key === " " && TABS[tab].stepped){ e.preventDefault(); togglePlay(); }
+  });
+  if(speech.ok){ pickVoice(); window.speechSynthesis.onvoiceschanged = pickVoice; }
+  else $("voice").style.display = "none";
+  readHash();
+  if(TABS[tab].enter) TABS[tab].enter();
+  render();
+}
+
+var TCOL = { 1:"#4A93D6", 2:"#2DC7D8" };
+
+/* ============ 分頁 1：快取一致性（圖 10.2） ============ */
+var coh = { snoop:false };
+function cohSteps(){ return coh.snoop ? T.coh.snoopSteps : T.coh.plainSteps; }
+function cacheBox(c){
+  if(!c) return "<div class='cache'><div class='lbl'>" + T.coh.cache + "</div><span class='hint'>" + T.coh.emptyCache + "</span></div>";
+  var st = { v:["v", T.coh.valid], m:["m", T.coh.modified], i:["i", T.coh.invalid] }[c.st];
+  return "<div class='cache'><div class='lbl'>" + T.coh.cache + "</div><span class='cv" + (c.st === "i" ? " inv" : "") + "'><span>A = " + c.v + "</span><span class='st " + st[0] + "'>" + st[1] + "</span></span></div>";
+}
+function renderCoh(stp){
+  var s = cohSteps()[stp];
+  var cpu = function(k){
+    return "<div class='cpu" + (s.prog === k ? " here" : "") + "'><div class='nm'>CPU " + k + (s.prog === k ? "<span class='prog'>" + T.coh.prog + "</span>" : "") + "</div>" + cacheBox(s["c" + k]) + "</div>";
+  };
+  var rr = s.read ? "<div class='readres' style='color:" + (s.read.ok ? "var(--green)" : "var(--red)") + "'>" + s.read.text + "</div>" : "";
+  $("body").innerHTML = "<div class='cols wide'><div class='box'><h3>" + T.coh.figTitle + "</h3><div class='hw'>" + cpu(1) + cpu(2) +
+    "<div class='bus'><b>BUS</b><span>" + (s.bus || "<span class='hint'>" + T.coh.quiet + "</span>") + "</span></div>" +
+    "<div class='mem'><div class='nm'>" + T.coh.memory + "</div><div class='val'>A = " + s.mem + "</div></div></div>" + rr + "</div>" +
+    "<div class='box'><h3>" + T.coh.notesTitle + "</h3><div class='hint' style='font-size:13px;line-height:1.75'>" + (coh.snoop ? T.coh.snoopNote : T.coh.plainNote) + "</div></div></div>";
+  setMsg(s.msg, !!s.bad);
+  setExtra("<span class='seg'><button data-sn='0' aria-pressed='" + !coh.snoop + "'>" + T.coh.modePlain + "</button><button data-sn='1' aria-pressed='" + coh.snoop + "'>" + T.coh.modeSnoop + "</button></span>");
+  each($("extra").querySelectorAll("[data-sn]"), function(b){
+    b.addEventListener("click", function(){ coh.snoop = b.getAttribute("data-sn") === "1"; stopPlay(); step = 0; speech.last = ""; render(); });
+  });
+}
+
+/* ============ 分頁 2：List_Pop 競爭（圖 10.3） ============ */
+var CODE_PLAIN = [
+  ["Node_t *tmp = head;", "// remember old head", "tmp"],
+  ["int value = head->value;", "// ... and its value", "val"],
+  ["head = head->next;", "// advance to next", "adv"],
+  ["free(tmp);", "// free old head", "free"],
+  ["return value;", "// return value @head", "ret"]
+];
+var CODE_LOCK = [["lock(&m);", "", "lock"]].concat(CODE_PLAIN.slice(0, 4), [["unlock(&m);", "", "unlock"], CODE_PLAIN[4]]);
+var race;
+function raceReset(keepLock){
+  var lock = keepLock && race ? race.lock : false;
+  race = { lock:lock, nodes:[{ v:10, freed:0, out:false }, { v:20, freed:0, out:false }, { v:30, freed:0, out:false }], head:0, owner:0,
+           th:{ 1:{ pc:0, tmp:null, value:null, ret:null, wait:false }, 2:{ pc:0, tmp:null, value:null, ret:null, wait:false } },
+           timer:0, note:null, bad:false };
+}
+raceReset(false);
+function raceCode(){ return race.lock ? CODE_LOCK : CODE_PLAIN; }
+function raceStep(k){
+  var th = race.th[k], code = raceCode(), other = race.th[k === 1 ? 2 : 1];
+  if(th.pc >= code.length){ race.note = fill(T.race.already, { t:"T" + k }); return; }
+  var op = code[th.pc][2], N = race.nodes, nm = "T" + k;
+  th.wait = false;
+  if(op === "lock"){
+    if(race.owner && race.owner !== k){ th.wait = true; race.note = fill(T.race.waitLock, { t:nm, o:"T" + race.owner }); return; }
+    race.owner = k; race.note = fill(T.race.gotLock, { t:nm });
+  } else if(op === "unlock"){
+    race.owner = 0; race.note = fill(T.race.unlocked, { t:nm });
+    if(other.wait) other.wait = false;
+  } else if(op === "tmp"){
+    th.tmp = race.head;
+    race.note = race.head < 0 ? fill(T.race.tmpNull, { t:nm }) : fill(T.race.tmp, { t:nm, v:N[race.head].v });
+  } else if(op === "val"){
+    if(race.head < 0){ race.note = fill(T.race.valNull, { t:nm }); race.bad = true; th.pc = code.length; return; }
+    th.value = N[race.head].v;
+    race.note = fill(T.race.val, { t:nm, v:th.value }) + (th.tmp !== race.head && th.tmp >= 0 ? " " + fill(T.race.valOther, { a:N[th.tmp].v, b:th.value }) : "");
+  } else if(op === "adv"){
+    var old = race.head;
+    race.head = old >= 0 && old + 1 < N.length ? old + 1 : -1;
+    race.note = fill(T.race.adv, { t:nm, v:race.head >= 0 ? N[race.head].v : "NULL" });
+    if(th.tmp !== old && old >= 0){ race.note += " " + fill(T.race.skip, { v:N[old].v }); }
+  } else if(op === "free"){
+    if(th.tmp == null || th.tmp < 0){ race.note = fill(T.race.freeNull, { t:nm }); }
+    else {
+      N[th.tmp].freed++; N[th.tmp].out = true;
+      race.note = N[th.tmp].freed > 1 ? fill(T.race.dbl, { t:nm, v:N[th.tmp].v }) : fill(T.race.free, { t:nm, v:N[th.tmp].v });
+      if(N[th.tmp].freed > 1) race.bad = true;
+    }
+  } else if(op === "ret"){
+    th.ret = th.value;
+    race.note = fill(T.race.ret, { t:nm, v:th.value });
+    if(other.ret != null && other.ret === th.value){ race.note += " " + fill(T.race.same, { v:th.value }); race.bad = true; }
+  }
+  th.pc++;
+}
+function lostNodes(){                                       // 已經不在串列上、卻沒被 free 的節點
+  var N = race.nodes, inList = {}, i = race.head;
+  while(i >= 0 && i < N.length){ inList[i] = 1; i = i + 1 < N.length ? i + 1 : -1; }
+  var both = race.th[1].pc >= raceCode().length && race.th[2].pc >= raceCode().length;
+  return N.map(function(n, k){ return both && !inList[k] && !n.freed; });
+}
+function renderRace(){
+  var code = raceCode(), lost = lostNodes();
+  var lines = code.map(function(c, i){
+    var mk = [1, 2].filter(function(k){ return race.th[k].pc === i; }).map(function(k){ return "<span style='background:" + TCOL[k] + "'>T" + k + "▶</span>"; }).join("");
+    return "<span class='ln" + (c[2] === "lock" || c[2] === "unlock" ? " lockln" : "") + "'><span class='mk'>" + mk + "</span><span>" + esc(c[0]) + (c[1] ? "  <span class='cm'>" + esc(c[1]) + "</span>" : "") + "</span></span>";
+  }).join("");
+  var done = [1, 2].filter(function(k){ return race.th[k].pc >= code.length; }).map(function(k){ return "<span style='color:" + TCOL[k] + "'>T" + k + "</span>"; }).join(" ");
+  var nodes = "<span class='arrow'>head →</span>" + (race.head < 0 ? "<span class='arrow'>NULL</span>" : "") + race.nodes.map(function(n, k){
+    var cls = "node" + (k === race.head ? " head" : "") + (n.freed > 1 ? " dbl" : (n.freed ? " freed" : "")) + (lost[k] ? " lost" : "");
+    var s = n.freed > 1 ? T.race.sDbl : (n.freed ? T.race.sFreed : (lost[k] ? T.race.sLost : (k === race.head ? "head" : "")));
+    return "<div class='" + cls + "'><div class='v'>" + n.v + "</div><div class='s'>" + s + "</div></div>" + (k < race.nodes.length - 1 ? "<span class='arrow'>→</span>" : "<span class='arrow'>→ NULL</span>");
+  }).join("");
+  var tcard = function(k){
+    var th = race.th[k], v = function(x){ return x == null ? "—" : x; };
+    return "<div class='tc'><div class='h'><span style='color:" + TCOL[k] + "'>T" + k + "</span>" + (th.wait ? "<span class='wait'>" + T.race.waiting + "</span>" : "") + "</div>" +
+      "tmp&nbsp;→ " + (th.tmp == null ? "—" : (th.tmp < 0 ? "NULL" : race.nodes[th.tmp].v)) + "<br>value = " + v(th.value) + "<br>" + T.race.returned + " " + v(th.ret) + "</div>";
+  };
+  $("body").innerHTML = "<div class='cols'><div class='box'><h3>" + T.race.codeTitle + (race.lock ? T.race.withLock : "") + "</h3><div class='code'>" + lines + "</div>" +
+      "<p class='hint' style='margin:8px 0 0'>" + T.race.codeNote + (done ? "&nbsp;&nbsp;" + T.race.doneLbl + " " + done : "") + "</p></div>" +
+    "<div class='box'><h3>" + T.race.listTitle + "</h3><div class='list'>" + nodes + "</div>" +
+      "<div class='thr'>" + tcard(1) + tcard(2) + "</div>" +
+      "<div class='btns'><button class='btn' id='r1' style='border-color:" + TCOL[1] + "'>" + T.race.step1 + "</button><button class='btn' id='r2' style='border-color:" + TCOL[2] + "'>" + T.race.step2 + "</button><button class='btn' id='rreset'>" + T.ui.reset + "</button></div>" +
+      "<div class='btns'><button class='btn prim' id='pbad'>" + T.race.playBad + "</button><button class='btn' id='pgood'>" + T.race.playGood + "</button></div></div></div>";
+  $("r1").addEventListener("click", function(){ raceStop(); raceStep(1); renderRace(); raceMsg(); });
+  $("r2").addEventListener("click", function(){ raceStop(); raceStep(2); renderRace(); raceMsg(); });
+  $("rreset").addEventListener("click", function(){ raceStop(); raceReset(true); renderRace(); setMsg(race.lock ? T.race.introLock : T.race.intro); });
+  $("pbad").addEventListener("click", function(){ racePlay("alt"); });
+  $("pgood").addEventListener("click", function(){ racePlay("seq"); });
+  setExtra("<span class='seg'><button data-lk='0' aria-pressed='" + !race.lock + "'>" + T.race.noLock + "</button><button data-lk='1' aria-pressed='" + race.lock + "'>" + T.race.lockBtn + "</button></span>");
+  each($("extra").querySelectorAll("[data-lk]"), function(b){
+    b.addEventListener("click", function(){ raceStop(); race.lock = b.getAttribute("data-lk") === "1"; raceReset(true); renderRace(); setMsg(race.lock ? T.race.introLock : T.race.intro); sayMsg(); });
+  });
+}
+function raceMsg(){
+  var code = raceCode(), fin = race.th[1].pc >= code.length && race.th[2].pc >= code.length;
+  var txt = race.note || "";
+  if(fin){
+    var lost = lostNodes().map(function(x, k){ return x ? race.nodes[k].v : null; }).filter(function(x){ return x != null; });
+    if(race.bad || lost.length) txt += " " + T.race.sumBad + (lost.length ? " " + fill(T.race.sumLost, { v:lost.join(T.ui.listSep) }) : "");
+    else txt += " " + fill(T.race.sumGood, { a:race.th[1].ret, b:race.th[2].ret });
+  }
+  setMsg(txt, race.bad);
+}
+// alt：T1、T2 輪流各走一行（在等鎖的那一個也算一次）；seq：T1 全部走完再換 T2
+function racePlay(mode){
+  raceStop(); raceReset(true); renderRace(); setMsg(race.lock ? T.race.introLock : T.race.intro);
+  var n = 0, turn = 1, len = raceCode().length;
+  race.timer = setInterval(function(){
+    var d1 = race.th[1].pc >= len, d2 = race.th[2].pc >= len;
+    if((d1 && d2) || n++ > 40){ raceStop(); sayMsg(); return; }
+    var k = mode === "seq" ? (d1 ? 2 : 1) : (turn === 1 ? (d1 ? 2 : 1) : (d2 ? 1 : 2));
+    turn = turn === 1 ? 2 : 1;
+    raceStep(k); renderRace(); raceMsg();
+  }, REDUCED ? 60 : 850);
+}
+function raceStop(){ clearInterval(race.timer); }
+
+/* ============ 分頁 3：快取親和度 ============ */
+var FAST = 0.30, SLOW = 1.50;                               // affinity.c 實測：留在原核心 0.30 µs、換核心 1.50 µs（16 KB）
+var aff = { warm:null, rounds:[] };
+function affRun(cpu){
+  var hit = aff.warm === cpu;
+  aff.rounds.push({ cpu:cpu, cost:hit ? FAST : SLOW, hit:hit });
+  aff.warm = cpu;
+}
+function renderAff(){
+  var tot = aff.rounds.reduce(function(a, r){ return a + r.cost; }, 0);
+  var cpuBox = function(k){
+    var warm = aff.warm === k;
+    return "<div class='cpu" + (aff.rounds.length && aff.rounds[aff.rounds.length - 1].cpu === k ? " here" : "") + "'><div class='nm'>CPU " + k + "</div>" +
+      "<div class='hint' style='margin-top:8px'>" + (warm ? T.aff.warm : T.aff.cold) + "</div><div class='heat" + (warm ? " warm" : "") + "'>" + Array(33).join("<i></i>") + "</div></div>";
+  };
+  var bars = aff.rounds.map(function(r, i){
+    return "<div style='height:" + (r.cost / SLOW * 52 + 4) + "px;background:" + (r.hit ? "var(--green)" : "var(--red)") + "' title='" + r.cost.toFixed(2) + " µs'>" + r.cpu + "</div>";
+  }).join("");
+  $("body").innerHTML = "<div class='cols wide'><div class='box'><h3>" + T.aff.title + "</h3><div class='two'>" + cpuBox(0) + cpuBox(1) + "</div>" +
+      "<div class='btns'><button class='btn' id='a0'>" + T.aff.run0 + "</button><button class='btn' id='a1'>" + T.aff.run1 + "</button><button class='btn' id='areset'>" + T.ui.reset + "</button></div>" +
+      "<div class='btns'><button class='btn prim' id='astay'>" + T.aff.stay + "</button><button class='btn prim' id='ahop'>" + T.aff.hop + "</button></div>" +
+      "<h3 style='margin:16px 0 0'>" + T.aff.roundsTitle + "</h3><div class='rounds'>" + (bars || "<span class='hint'>" + T.aff.none + "</span>") + "</div>" +
+      "<div class='tot'><span>" + fill(T.aff.total, { n:aff.rounds.length, t:tot.toFixed(2) }) + "</span></div></div>" +
+    "<div class='box'><h3>" + T.aff.measTitle + "</h3><div class='term'>" + T.aff.meas + "</div><p class='hint' style='margin:10px 0 0'>" + T.aff.measNote + "</p></div></div>";
+  var go = function(fn){ return function(){ fn(); renderAff(); affMsg(); }; };
+  $("a0").addEventListener("click", go(function(){ affRun(0); }));
+  $("a1").addEventListener("click", go(function(){ affRun(1); }));
+  $("areset").addEventListener("click", go(function(){ aff.warm = null; aff.rounds = []; }));
+  $("astay").addEventListener("click", function(){ aff.warm = null; aff.rounds = []; for(var i = 0; i < 10; i++) affRun(0); renderAff(); affMsg("stay"); sayMsg(); });
+  $("ahop").addEventListener("click", function(){ aff.warm = null; aff.rounds = []; for(var i = 0; i < 10; i++) affRun(i % 2); renderAff(); affMsg("hop"); sayMsg(); });
+}
+function affMsg(kind){
+  if(!aff.rounds.length){ setMsg(T.aff.intro); return; }
+  var tot = aff.rounds.reduce(function(a, r){ return a + r.cost; }, 0).toFixed(2), last = aff.rounds[aff.rounds.length - 1];
+  if(kind === "stay"){ setMsg(fill(T.aff.stayMsg, { t:tot })); return; }
+  if(kind === "hop"){ setMsg(fill(T.aff.hopMsg, { t:tot }), true); return; }
+  setMsg(last.hit ? fill(T.aff.hit, { c:last.cpu }) : fill(T.aff.miss, { c:last.cpu }), !last.hit);
+}
+
+/* ============ 分頁 4：單佇列 vs 多佇列（和 code/W4/multiq.c 同一套） ============ */
+function gridSQMS(){
+  var q = "ABCDE".split(""), g = [[], [], [], []];
+  for(var s = 0; s < 10; s++){
+    var took = [0, 1, 2, 3].map(function(){ return q.shift(); });
+    took.forEach(function(j, c){ g[c].push(j); q.push(j); });
+  }
+  return g;
+}
+function gridSQMSAff(){
+  var g = [[], [], [], []];
+  for(var s = 0; s < 10; s++){ var k = s % 5; for(var c = 0; c < 4; c++) g[c].push(k > 0 && c === k - 1 ? "E" : "ABCD"[c]); }
+  return g;
+}
+function gridMQMS(q0, q1){
+  return [q0, q1].map(function(q){ var r = []; for(var i = 0; i < 12; i++) r.push(q.length ? q[Math.floor(i / 2) % q.length] : "-"); return r; });
+}
+function gridMigrate(){
+  var phase = [["A", "BD"], ["BA", "D"], ["B", "AD"]], g = [[], []];
+  phase.forEach(function(p){ for(var c = 0; c < 2; c++) for(var i = 0; i < 4; i++) g[c].push(p[c][i % p[c].length]); });
+  return g;
+}
+var QSCEN = [
+  { g:gridSQMS, jobs:"ABCDE", cpus:4 }, { g:gridSQMSAff, jobs:"ABCDE", cpus:4 },
+  { g:function(){ return gridMQMS("AC", "BD"); }, jobs:"ABCD", cpus:2 }, { g:function(){ return gridMQMS("A", "BD"); }, jobs:"ABD", cpus:2 },
+  { g:function(){ return gridMQMS("", "BD"); }, jobs:"BD", cpus:2 }, { g:gridMigrate, jobs:"ABD", cpus:2, phases:true }
+];
+function gridHTML(g, opt){
+  opt = opt || {};
+  var rows = g.map(function(r, c){
+    return "<div class='grow'><div class='lbl'>CPU " + c + "</div>" + r.map(function(x, i){
+      var ph = opt.phases && i > 0 && i % 4 === 0 ? " phase" : "";
+      var ev = opt.ev && opt.ev[c] && opt.ev[c][i] ? opt.ev[c][i] : "";
+      var delay = REDUCED ? "" : "animation-delay:" + (i * 0.06).toFixed(2) + "s;";
+      if(x === "-" || x == null) return "<div class='cell idle" + ph + "' style='" + delay + "'>·" + ev + "</div>";
+      return "<div class='cell" + ph + "' style='" + delay + "background:" + JOBCOLOR[x] + "'>" + x + ev + "</div>";
+    }).join("") + "</div>";
+  }).join("");
+  var axis = "<div class='gaxis'>" + g[0].map(function(_, i){ return "<span" + (opt.phases && i > 0 && i % 4 === 0 ? " style='margin-left:10px'" : "") + ">" + (i + 1) + "</span>"; }).join("") + "</div>";
+  return "<div class='grid'>" + rows + axis + "</div>";
+}
+function gridStats(g, jobs){
+  var out = jobs.split("").map(function(j){
+    var cells = 0, moves = 0, last = -1;
+    for(var i = 0; i < g[0].length; i++) for(var c = 0; c < g.length; c++) if(g[c][i] === j){ cells++; if(last >= 0 && last !== c) moves++; last = c; }
+    return { j:j, cells:cells, moves:moves };
+  });
+  var idle = 0; g.forEach(function(r){ r.forEach(function(x){ if(x === "-") idle++; }); });
+  return "<div class='stats'><div><span>" + T.q.cells + "</span>" + out.map(function(o){ return o.j + " " + o.cells; }).join("&nbsp;&nbsp;") + "</div>" +
+    "<div><span>" + T.q.moves + "</span>" + out.map(function(o){ return o.j + " " + o.moves; }).join("&nbsp;&nbsp;") + "</div><div><span>" + T.q.idle + "</span>" + idle + "</div></div>";
+}
+function renderQ(st){
+  var sc = QSCEN[st], s = T.q.steps[st], g = sc.g();
+  $("body").innerHTML = "<div class='box'><h3>" + s.title + "<span class='hint'>" + s.queues + "</span></h3>" + gridHTML(g, { phases:sc.phases }) + gridStats(g, sc.jobs) + "</div>";
+  setMsg(s.msg, !!s.bad);
+}
+
+/* ============ 分頁 5：工作竊取（和 multiq.c 同一套規則） ============ */
+var ws = { P:2, N:8, L:3 };
+function steal(P, N, L){
+  var wait = [[], []], run = [-1, -1], left = [], done = 0, t = 0, peeks = 0, idle = 0;
+  var g = [[], []], ev = [{}, {}];
+  for(var j = 0; j < N; j++){ wait[0].push(j); left.push(L); }
+  for(; done < N && t < 400; t++){
+    if(P > 0 && t % P === 0){
+      for(var c = 0; c < 2; c++){
+        if(wait[c].length > 0) continue;
+        peeks++;
+        var o = 1 - c, mine = run[c] >= 0 ? 1 : 0, theirs = (run[o] >= 0 ? 1 : 0) + wait[o].length;
+        ev[c][t] = "<span class='pk'></span>";
+        if(wait[o].length > 0 && theirs >= mine + 2){ wait[c].push(wait[o].pop()); ev[c][t] = "<span class='ev'>▼</span><span class='pk'></span>"; }
+      }
+    }
+    for(c = 0; c < 2; c++){
+      if(run[c] < 0 && wait[c].length > 0) run[c] = wait[c].shift();
+      if(run[c] < 0){ idle++; g[c].push("-"); continue; }
+      g[c].push(String(run[c] + 1));
+      if(--left[run[c]] === 0){ run[c] = -1; done++; }
+    }
+  }
+  return { g:g, ev:ev, peeks:peeks, idle:idle, finish:t };
+}
+function wsGrid(r){
+  var rows = r.g.map(function(row, c){
+    return "<div class='grow'><div class='lbl'>CPU " + c + "</div>" + row.map(function(x, i){
+      var e = r.ev[c][i] || "";
+      if(x === "-") return "<div class='cell idle'>·" + e + "</div>";
+      var hue = ["#4A93D6", "#F2B84B", "#2DC7D8", "#54C878", "#9B8CE8", "#EA6B5E"][(+x - 1) % 6];
+      return "<div class='cell' style='background:" + hue + "'>" + x + e + "</div>";
+    }).join("") + "</div>";
+  }).join("");
+  return "<div class='grid'>" + rows + "<div class='gaxis'>" + r.g[0].map(function(_, i){ return "<span>" + i + "</span>"; }).join("") + "</div></div>";
+}
+function renderWS(){
+  var r = steal(ws.P, ws.N, ws.L);
+  var Ps = [1, 2, 4, 8, 0];
+  var rows = Ps.map(function(P){ var x = steal(P, ws.N, ws.L); return "<tr" + (P === ws.P ? " class='hl'" : "") + "><td>" + (P ? fill(T.ws.every, { p:P }) : T.ws.never) + "</td><td>" + x.peeks + "</td><td>" + x.idle + "</td><td>" + x.finish + "</td></tr>"; }).join("");
+  var opt = function(v, sel, lbl){ return "<option value='" + v + "'" + (v === sel ? " selected" : "") + ">" + lbl + "</option>"; };
+  $("body").innerHTML = "<div class='box'><h3>" + T.ws.gridTitle + "<span class='field'>" + T.ws.pLbl + " <select id='wsP'>" +
+      [1, 2, 3, 4, 6, 8].map(function(p){ return opt(p, ws.P, fill(T.ws.every, { p:p })); }).join("") + opt(0, ws.P, T.ws.never) + "</select>&nbsp;&nbsp;" +
+      T.ws.nLbl + " <select id='wsN'>" + [4, 6, 8, 10, 12].map(function(n){ return opt(n, ws.N, n); }).join("") + "</select>&nbsp;&nbsp;" +
+      T.ws.lLbl + " <select id='wsL'>" + [1, 2, 3, 4, 6].map(function(l){ return opt(l, ws.L, l); }).join("") + "</select></span></h3>" +
+      wsGrid(r) + "<div class='stats'><div><span>" + T.ws.peeks + "</span>" + r.peeks + "</div><div><span>" + T.ws.idle + "</span>" + r.idle + "</div><div><span>" + T.ws.finish + "</span>" + r.finish + "</div></div>" +
+      "<p class='hint' style='margin:10px 0 0'>" + T.ws.legend + "</p></div>" +
+    "<div class='box'><h3>" + T.ws.tableTitle + "</h3><table class='r'><tr><th>" + T.ws.cols.join("</th><th>") + "</th></tr>" + rows + "</table></div>";
+  $("wsP").addEventListener("change", function(){ ws.P = +$("wsP").value; renderWS(); wsMsg(); });
+  $("wsN").addEventListener("change", function(){ ws.N = +$("wsN").value; renderWS(); wsMsg(); });
+  $("wsL").addEventListener("change", function(){ ws.L = +$("wsL").value; renderWS(); wsMsg(); });
+}
+function wsMsg(){
+  var r = steal(ws.P, ws.N, ws.L);
+  setMsg(ws.P ? fill(T.ws.msgP, { p:ws.P, k:r.peeks, i:r.idle, f:r.finish }) : fill(T.ws.msgNever, { i:r.idle, f:r.finish }), !ws.P);
+}
+
+/* ============ 分頁 ============ */
+startEngine([
+  { name:T.tabs[0], ttl:T.tabTtl[0], note:T.tabNote[0], stepped:true, len:function(){ return cohSteps().length; }, render:renderCoh },
+  { name:T.tabs[1], ttl:T.tabTtl[1], note:T.tabNote[1], stepped:false, len:function(){ return 1; }, render:function(){ renderRace(); if(race.note) raceMsg(); else setMsg(race.lock ? T.race.introLock : T.race.intro); } },
+  { name:T.tabs[2], ttl:T.tabTtl[2], note:T.tabNote[2], stepped:false, len:function(){ return 1; }, render:function(){ renderAff(); affMsg(); } },
+  { name:T.tabs[3], ttl:T.tabTtl[3], note:T.tabNote[3], stepped:true, len:function(){ return QSCEN.length; }, render:renderQ },
+  { name:T.tabs[4], ttl:T.tabTtl[4], note:T.tabNote[4], stepped:false, len:function(){ return 1; }, render:function(){ renderWS(); wsMsg(); } }
+]);
+</script>
+</body>
+</html>

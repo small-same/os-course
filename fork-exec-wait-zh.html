@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>fork / exec / wait 一步一步看</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --navy:#0E1B2E; --navy2:#132741; --panel:#183253; --panel2:#1d3c61;
+    --line:#284a70; --line2:#33587f;
+    --ink:#EAF1F8; --mute:#9FB6CF; --dim:#6f89a4;
+    --blue:#4A93D6; --cyan:#2DC7D8; --amber:#F2B84B; --green:#54C878; --red:#EA6B5E;
+    --mono:"IBM Plex Mono","Consolas",monospace;
+    --sans:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; color:var(--ink); font-family:var(--sans);
+    background:radial-gradient(1200px 700px at 50% -10%, #17304f 0%, rgba(23,48,79,0) 60%), var(--navy);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px; margin:0 auto; padding:clamp(16px,3vw,30px) clamp(14px,3vw,26px) 28px;
+    display:flex; flex-direction:column; gap:clamp(10px,1.8vh,16px);}
+
+  /* ---------- header ---------- */
+  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--cyan); display:flex; align-items:center; gap:10px;}
+  .eyebrow::before{content:""; width:26px; height:2px; background:var(--cyan);}
+  h1{margin:6px 0 0; font-weight:900; font-size:clamp(23px,3.6vw,34px); line-height:1.12; letter-spacing:-.01em;}
+  h1 span{color:var(--cyan);}
+
+  /* ---------- tabs ---------- */
+  .tabs{display:flex; flex-wrap:wrap; gap:8px;}
+  .tab{font-family:var(--mono); font-size:13px; font-weight:600; letter-spacing:.02em;
+    background:var(--navy2); color:var(--mute); border:1px solid var(--line);
+    border-radius:9px; padding:8px 15px; cursor:pointer; transition:.2s;}
+  .tab:hover{border-color:var(--line2); color:var(--ink);}
+  .tab[aria-selected="true"]{background:var(--cyan); border-color:var(--cyan); color:#08131f;}
+  .tab small{display:block; font-family:var(--sans); font-size:10.5px; font-weight:500; opacity:.8; letter-spacing:0;}
+
+  /* ---------- layout ---------- */
+  .main{display:grid; grid-template-columns:1.04fr .96fr; gap:clamp(10px,1.6vw,16px); align-items:start;}
+  @media (max-width:900px){ .main{grid-template-columns:1fr;} }
+
+  .card{background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.45));
+    border:1px solid var(--line); border-radius:13px; overflow:hidden;}
+  .card__h{display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:9px 14px; border-bottom:1px solid var(--line); background:rgba(10,22,38,.5);}
+  .card__t{font-family:var(--mono); font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim);}
+
+  /* ---------- code ---------- */
+  .codewrap{position:relative;}
+  .code{margin:0; padding:10px 0; font-family:var(--mono); font-size:12.5px; line-height:1.62;
+    counter-reset:ln; overflow-x:auto; transition:opacity .45s, filter .45s;}
+  .ln.dim{opacity:.2; filter:grayscale(.85);}
+  .ln{display:flex; gap:12px; padding:0 14px 0 0; white-space:pre; border-left:3px solid transparent;
+    transition:background .3s, border-color .3s, opacity .3s;}
+  .ln::before{counter-increment:ln; content:counter(ln);
+    width:38px; flex:none; text-align:right; color:#4e6c8e; font-size:11.5px; padding-top:1px;}
+  .ln.p{background:rgba(74,147,214,.17); border-left-color:var(--blue);}
+  .ln.c{background:rgba(45,199,216,.15); border-left-color:var(--cyan);}
+  .ln.pc{background:linear-gradient(90deg,rgba(74,147,214,.17),rgba(45,199,216,.15)); border-left-color:var(--cyan);}
+  .ln.dead{background:rgba(234,107,94,.16); border-left-color:var(--red);
+    text-decoration:line-through; text-decoration-color:var(--red); text-decoration-thickness:2px;}
+  .cm{color:#6f89a4;}
+  .kw{color:#7FC4EE;} .fn{color:var(--amber);} .st{color:#8FD9A8;}
+  .replaced-badge{position:absolute; inset:0; display:none; place-items:center; text-align:center; padding:20px;}
+  .replaced-badge.on{display:grid;}
+  .replaced-badge div{background:rgba(242,184,75,.14); border:1px solid var(--amber); border-radius:12px;
+    padding:16px 20px; max-width:400px;}
+  .replaced-badge b{display:block; font-size:16px; color:var(--amber); margin-bottom:6px;}
+  .replaced-badge p{margin:0; font-size:13px; line-height:1.6; color:var(--ink);}
+
+  /* ---------- overview lanes ---------- */
+  .ov{padding:26px 16px 18px;}
+  .ovbox{position:relative; height:160px;}
+  .ovname{position:absolute; left:0; width:62px; text-align:right; font-size:12.5px; font-weight:700;}
+  .ovname.p{top:38px; color:var(--blue);} .ovname.c{top:98px; color:var(--cyan);}
+  .ovtrack{position:absolute; left:74px; right:0; top:0; bottom:0;}
+  .seg{position:absolute; height:30px; border-radius:4px; display:grid; place-items:center;
+    font-size:10.5px; font-weight:700; color:#08131f; padding:0 4px; text-align:center;
+    transform:scaleX(0); transform-origin:left; transition:transform .55s cubic-bezier(.2,.8,.2,1), opacity .4s; opacity:0;}
+  .seg.on{transform:scaleX(1); opacity:1;}
+  .seg.pl{top:34px;} .seg.cl{top:94px;}
+  .seg.blue{background:var(--blue);} .seg.cyan{background:var(--cyan);} .seg.amber{background:var(--amber);}
+  .seg.wait{background:rgba(159,182,207,.13); border:1px dashed var(--line2); color:var(--mute); font-weight:500;}
+  .mk{position:absolute; transform:translateX(-50%) translateY(4px); opacity:0; transition:.4s;
+    font-family:var(--mono); font-size:10.5px; font-weight:600; padding:3px 9px; border-radius:99px; white-space:nowrap;}
+  .mk.on{opacity:1; transform:translateX(-50%) translateY(0);}
+  .mk.top{top:2px;} .mk.bot{top:132px;}
+  .mk.b{background:var(--blue); color:#08131f;} .mk.c{background:var(--cyan); color:#08131f;}
+  .mk.a{background:var(--amber); color:#08131f;}
+  .vl{position:absolute; top:26px; height:104px; width:0; border-left:1px dashed var(--line2);
+    opacity:0; transition:.4s;}
+  .vl.on{opacity:1;}
+
+  /* ---------- process cards ---------- */
+  .procs{display:flex; flex-direction:column; gap:10px;}
+  .proc{border:1px solid var(--line); border-radius:12px; padding:10px 13px 11px;
+    background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.4));
+    transition:opacity .4s, transform .4s, border-color .4s;}
+  .proc.hidden{opacity:0; transform:translateY(-6px); pointer-events:none; height:0; padding:0; border:0; margin:0; overflow:hidden;}
+  .proc.p{border-left:3px solid var(--blue);} .proc.c{border-left:3px solid var(--cyan);}
+  .proc__h{display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;}
+  .proc__n{font-size:14.5px; font-weight:700;} .proc.p .proc__n{color:var(--blue);} .proc.c .proc__n{color:var(--cyan);}
+  .proc__pid{font-family:var(--mono); font-size:12px; color:var(--mute);}
+  .chip{font-family:var(--mono); font-size:10.5px; font-weight:600; padding:2px 9px; border-radius:99px; margin-left:auto;}
+  .chip.run{background:rgba(84,200,120,.18); color:var(--green); border:1px solid rgba(84,200,120,.45);}
+  .chip.block{background:rgba(242,184,75,.16); color:var(--amber); border:1px solid rgba(242,184,75,.45);}
+  .chip.zombie{background:rgba(234,107,94,.16); color:var(--red); border:1px solid rgba(234,107,94,.5);}
+  .chip.done{background:rgba(159,182,207,.12); color:var(--mute); border:1px solid var(--line2);}
+  .kv{display:grid; grid-template-columns:auto 1fr; gap:3px 12px; margin-top:8px;
+    font-size:12.5px; line-height:1.5;}
+  .kv dt{color:var(--dim); font-size:11.5px;}
+  .kv dd{margin:0; font-family:var(--mono); font-size:12px; color:var(--ink);}
+  .kv dd.hot{color:var(--amber); font-weight:600;}
+
+  /* ---------- fd table ---------- */
+  .fds{display:flex; gap:6px; margin-top:9px;}
+  .fd{flex:1; border:1px solid var(--line); border-radius:7px; padding:5px 7px; background:rgba(10,22,38,.45);
+    transition:.35s;}
+  .fd b{display:block; font-family:var(--mono); font-size:11px; color:var(--cyan);}
+  .fd span{font-size:11px; color:var(--mute);}
+  .fd.empty{border-style:dashed; opacity:.55;}
+  .fd.hot{border-color:var(--amber); background:rgba(242,184,75,.1);}
+  .fd.hot span{color:var(--amber);}
+
+  /* ---------- terminal / file ---------- */
+  .term{font-family:var(--mono); font-size:12.5px; line-height:1.75; padding:11px 14px;
+    min-height:126px; background:#0a1626;}
+  .term .l{opacity:0; transform:translateY(3px); animation:in .38s forwards;}
+  @keyframes in{to{opacity:1; transform:none;}}
+  .term .dim{color:var(--dim);} .term .am{color:var(--amber);} .term .bl{color:#8ec5f0;}
+  .term .cy{color:#7fe3ec;} .term .empty{color:var(--dim); font-style:italic; font-family:var(--sans);}
+  .filebox{border-top:1px dashed var(--line); padding:9px 14px; background:rgba(242,184,75,.06);}
+  .filebox .n{font-family:var(--mono); font-size:11px; color:var(--amber); letter-spacing:.06em;}
+  .filebox .b{font-family:var(--mono); font-size:12.5px; margin-top:3px; min-height:20px;}
+
+  /* ---------- caption ---------- */
+  .caption{background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.4));
+    border:1px solid var(--line); border-left:3px solid var(--amber);
+    border-radius:12px; padding:12px 16px; min-height:86px; display:flex; flex-direction:column; gap:5px; justify-content:center;}
+  .role{font-family:var(--mono); font-size:12px; letter-spacing:.05em; color:var(--amber); font-weight:600;}
+  .cap{font-size:clamp(13.5px,1.6vw,15.5px); line-height:1.62; text-wrap:pretty;}
+  .cap b{color:var(--cyan);}
+
+  /* ---------- controls ---------- */
+  .controls{display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;}
+  .steps{display:flex; gap:6px; flex-wrap:wrap;}
+  .dot{width:26px; height:8px; border-radius:99px; background:var(--line); border:0; padding:0; cursor:pointer; transition:.25s;}
+  .dot:hover{background:var(--line2);}
+  .dot[aria-current="true"]{background:var(--cyan); width:38px;}
+  .btns{display:flex; gap:8px; align-items:center;}
+  .ctl{font-family:var(--sans); font-size:13px; font-weight:700; background:var(--navy2); color:var(--ink);
+    border:1px solid var(--line); border-radius:9px; padding:8px 15px; cursor:pointer; transition:.2s;}
+  .ctl:hover{border-color:var(--cyan);}
+  .ctl.primary{background:var(--cyan); color:#08131f; border-color:var(--cyan);}
+  .ctl.ghost{font-size:12px; padding:7px 12px; color:var(--mute);}
+  .hint{font-family:var(--mono); font-size:11.5px; color:var(--dim); text-align:center;}
+  footer{margin-top:8px; font-family:var(--mono); font-size:11px; color:#5d7791; line-height:1.7;}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">OSTEP · 第 5 章　行程 API</div>
+    <h1><span>fork · exec · wait</span>　一步一步看</h1>
+  </header>
+
+  <div class="tabs" id="tabs" role="tablist"></div>
+
+  <div class="main">
+    <div class="card">
+      <div class="card__h">
+        <span class="card__t" id="leftTitle">程式碼</span>
+        <button class="ctl ghost" id="swap" style="display:none">換一種順序</button>
+      </div>
+      <div class="codewrap">
+        <div class="code" id="code"></div>
+        <div class="replaced-badge" id="badge"><div>
+          <b>這個行程身上的程式已經被換掉了</b>
+          <p>上面這份 p3.c 的程式碼，在 <code>execvp()</code> 成功的瞬間就被 <code>wc</code> 蓋掉了。
+             不是被跳過——是已經不在記憶體裡。</p>
+        </div></div>
+        <div class="ov" id="ov" style="display:none">
+          <div class="ovbox">
+            <div class="ovname p">父行程</div>
+            <div class="ovname c">子行程</div>
+            <div class="ovtrack" id="ovtrack">
+              <div class="seg pl blue"  data-l="0"    data-w="22.2" data-from="0">正在跑</div>
+              <div class="seg pl wait"  data-l="22.2" data-w="55.6" data-from="2">卡在 wait()，什麼都不能做</div>
+              <div class="seg pl blue"  data-l="77.8" data-w="22.2" data-from="5">繼續往下</div>
+              <div class="seg cl cyan"  data-l="22.2" data-w="33.4" data-from="1">跑的還是同一支程式</div>
+              <div class="seg cl amber" data-l="55.6" data-w="22.2" data-from="3">已經換成 wc</div>
+              <div class="vl" data-l="22.2" data-from="1"></div>
+              <div class="vl" data-l="77.8" data-from="4"></div>
+              <div class="mk top b" data-l="22.2" data-from="1">fork()</div>
+              <div class="mk top c" data-l="77.8" data-from="5">wait() 返回</div>
+              <div class="mk bot a" data-l="55.6" data-from="3">exec()</div>
+              <div class="mk bot c" data-l="77.8" data-from="4">子行程結束</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="procs">
+        <div class="proc p" id="pp">
+          <div class="proc__h">
+            <span class="proc__n">父行程</span>
+            <span class="proc__pid" id="pPid">pid:—</span>
+            <span class="chip run" id="pState">執行中</span>
+          </div>
+          <dl class="kv">
+            <dt>目前在跑</dt><dd id="pLine">—</dd>
+            <dt>身上的程式</dt><dd id="pProg">—</dd>
+            <dt id="pRcK">rc</dt><dd id="pRc">—</dd>
+          </dl>
+        </div>
+        <div class="proc c hidden" id="cp">
+          <div class="proc__h">
+            <span class="proc__n">子行程</span>
+            <span class="proc__pid" id="cPid">pid:—</span>
+            <span class="chip run" id="cState">執行中</span>
+          </div>
+          <dl class="kv">
+            <dt>目前在跑</dt><dd id="cLine">—</dd>
+            <dt>身上的程式</dt><dd id="cProg">—</dd>
+            <dt id="cRcK">rc</dt><dd id="cRc">—</dd>
+          </dl>
+          <div class="fds" id="fds" style="display:none">
+            <div class="fd" id="fd0"><b>fd 0</b><span>鍵盤</span></div>
+            <div class="fd" id="fd1"><b>fd 1</b><span>螢幕</span></div>
+            <div class="fd" id="fd2"><b>fd 2</b><span>螢幕</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="termCard" style="margin-top:10px">
+        <div class="card__h"><span class="card__t">終端機輸出</span></div>
+        <div class="term" id="term"></div>
+        <div class="filebox" id="filebox" style="display:none">
+          <div class="n">./p4.output　（檔案）</div>
+          <div class="b" id="fileb"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="caption">
+    <div class="role" id="role">—</div>
+    <div class="cap" id="cap">—</div>
+  </div>
+
+  <div class="controls">
+    <div class="steps" id="steps"></div>
+    <div class="btns">
+      <button class="ctl" id="prev">‹ 上一步</button>
+      <button class="ctl primary" id="play">▶ 自動播放</button>
+      <button class="ctl" id="next">下一步 ›</button>
+    </div>
+  </div>
+  <div class="hint">用 ← → 切換步驟，空白鍵播放／暫停，數字鍵 1–5 換程式</div>
+
+  <footer>
+    樹德科技大學 資訊工程系　·　作業系統<br>
+    教材：Operating Systems: Three Easy Pieces (OSTEP) 第 5 章　·　程式碼在 code/W2/
+  </footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============ 小工具 ============ */
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// 極簡 C 語法上色
+function hi(s){
+  // 註解與字串先換成佔位符（@@n@@），免得後面的規則咬到已經插入的 HTML 標籤
+  s = esc(s);
+  var store = [];
+  function keep(cls, m){
+    store.push('<span class="' + cls + '">' + m + '</span>');
+    return '@@' + (store.length - 1) + '@@';
+  }
+  s = s.replace(/(\/\/[^\n]*)|("(?:[^"\\]|\\.)*")/g, function(m, c){ return keep(c ? 'cm' : 'st', m); });
+  s = s.replace(/\b(int|char|void|return|if|else|while|for|NULL)\b/g, '<span class="kw">$1</span>');
+  s = s.replace(/\b(fork|execvp|wait|printf|fprintf|exit|getpid|strdup|close|open|main)\b(?=\s*\()/g,
+                '<span class="fn">$1</span>');
+  return s.replace(/@@(\d+)@@/g, function(_, i){ return store[+i]; });
+}
+function P(o){ return Object.assign({pid:'—', line:0, state:'run', rc:'—', prog:'—'}, o||{}); }
+var STATE = { run:['run','執行中'], block:['block','阻塞（等待中）'], zombie:['zombie','殭屍 ZOMBIE'],
+              done:['done','已結束'] };
+
+/* ============ 程式碼 ============ */
+var CODE_P1 = [
+ 'int main(int argc, char *argv[]) {',
+ '    printf("hello (pid:%d)\\n", (int) getpid());',
+ '    int rc = fork();',
+ '    if (rc < 0) {                    // fork 失敗',
+ '        fprintf(stderr, "fork failed\\n");',
+ '        exit(1);',
+ '    } else if (rc == 0) {            // 子行程',
+ '        printf("child (pid:%d)\\n", (int) getpid());',
+ '    } else {                         // 父行程',
+ '        printf("parent of %d (pid:%d)\\n", rc, (int) getpid());',
+ '    }',
+ '    return 0;',
+ '}'
+];
+var CODE_P2 = [
+ 'int main(int argc, char *argv[]) {',
+ '    printf("hello (pid:%d)\\n", (int) getpid());',
+ '    int rc = fork();',
+ '    if (rc < 0) {',
+ '        fprintf(stderr, "fork failed\\n");  exit(1);',
+ '    } else if (rc == 0) {            // 子行程',
+ '        printf("child (pid:%d)\\n", (int) getpid());',
+ '    } else {                         // 父行程',
+ '        int rc_wait = wait(NULL);    // ← 只多了這一行',
+ '        printf("parent of %d (rc_wait:%d) (pid:%d)\\n",',
+ '               rc, rc_wait, (int) getpid());',
+ '    }',
+ '    return 0;',
+ '}'
+];
+var CODE_P3 = [
+ 'int main(int argc, char *argv[]) {',
+ '    printf("hello (pid:%d)\\n", (int) getpid());',
+ '    int rc = fork();',
+ '    if (rc < 0) {',
+ '        fprintf(stderr, "fork failed\\n");  exit(1);',
+ '    } else if (rc == 0) {            // 子行程',
+ '        printf("child (pid:%d)\\n", (int) getpid());',
+ '        char *myargs[3];',
+ '        myargs[0] = strdup("wc");    // 程式：字數統計',
+ '        myargs[1] = strdup("p3.c");  // 引數：要數的檔案',
+ '        myargs[2] = NULL;            // 陣列結尾',
+ '        execvp(myargs[0], myargs);   // 執行 wc',
+ '        printf("this shouldn\'t print out");',
+ '    } else {                         // 父行程',
+ '        int rc_wait = wait(NULL);',
+ '        printf("parent of %d (rc_wait:%d) (pid:%d)\\n",',
+ '               rc, rc_wait, (int) getpid());',
+ '    }',
+ '    return 0;',
+ '}'
+];
+var CODE_P4 = [
+ 'int main(int argc, char *argv[]) {',
+ '    int rc = fork();',
+ '    if (rc == 0) {                   // 子行程',
+ '        close(STDOUT_FILENO);        // ① 關掉 fd 1',
+ '        open("./p4.output",          // ② 拿到最小的空號',
+ '             O_CREAT|O_WRONLY|O_TRUNC, S_IRWXU);',
+ '',
+ '        char *myargs[3];             // ③ 接著 exec "wc"',
+ '        myargs[0] = strdup("wc");',
+ '        myargs[1] = strdup("p4.c");',
+ '        myargs[2] = NULL;',
+ '        execvp(myargs[0], myargs);',
+ '    } else {                         // 父行程',
+ '        int wc = wait(NULL);',
+ '    }',
+ '    return 0;',
+ '}'
+];
+
+/* ============ 輸出列 ============ */
+function o(t,c){ return {t:t, c:c||''}; }
+var HELLO1 = o('hello (pid:29146)','bl');
+
+/* ============ 總覽 ============ */
+var OVERVIEW = {
+  id:'ov', name:'總覽', sub:'三個呼叫',
+  steps:[
+    {label:'①', role:'一開始只有一個行程',
+     cap:'你在終端機打下 <b>./p3</b>，系統裡多了一個行程。目前就這麼一條線。',
+     p:P({pid:29146,prog:'p3',state:'run'}), c:null, out:[]},
+    {label:'②', role:'fork()：一條線變兩條',
+     cap:'OS 複製出一個一模一樣的新行程。位址空間、暫存器、開啟的檔案都各有一份。'
+        +'父拿到子的 PID，子拿到 <b>0</b>——兩邊只差這個回傳值。',
+     p:P({pid:29146,prog:'p3',rc:'29147'}), c:P({pid:29147,prog:'p3',rc:'0'}), out:[]},
+    {label:'③', role:'wait()：父行程停下來等',
+     cap:'父行程呼叫 <b>wait()</b> 之後就卡住了，這段時間它什麼也不做，'
+        +'一直到子行程結束為止。',
+     p:P({pid:29146,prog:'p3',rc:'29147',state:'block'}), c:P({pid:29147,prog:'p3',rc:'0'}), out:[]},
+    {label:'④', role:'exec()：把身上的程式換掉',
+     cap:'子行程呼叫 <b>exec()</b>，身上的程式整個被 <b>wc</b> 蓋掉——'
+        +'程式碼、靜態資料、堆、堆疊全部換新。但 <b>PID 沒有變</b>：沒有新行程，只是換了一支程式。',
+     p:P({pid:29146,prog:'p3',rc:'29147',state:'block'}), c:P({pid:29147,prog:'wc',rc:'—'}), out:[]},
+    {label:'⑤', role:'子行程結束',
+     cap:'wc 跑完，子行程結束。它會先停在<b>殭屍</b>狀態，把回傳碼留著等父行程來收。',
+     p:P({pid:29146,prog:'p3',rc:'29147',state:'block'}), c:P({pid:29147,prog:'wc',state:'zombie'}), out:[]},
+    {label:'⑥', role:'wait() 返回',
+     cap:'OS 通知父行程，<b>wait()</b> 這時才返回，順手把殭屍清掉。父行程醒過來，繼續往下走。',
+     p:P({pid:29146,prog:'p3',rc:'29147',state:'run'}), c:P({pid:29147,prog:'wc',state:'done'}), out:[]}
+  ]
+};
+
+/* ============ p1.c ============ */
+function buildP1(childFirst){
+  var base = [
+    {label:'①', role:'開始', cap:'只有一個行程，OS 給它一個 PID：<b>29146</b>。',
+     p:P({pid:29146,line:1,prog:'p1'}), c:null, out:[]},
+    {label:'②', role:'印出 hello',
+     cap:'第 2 行。這時系統裡<b>只有一個行程</b>，所以 hello 只會印一次——待會你會看到這件事的重要性。',
+     p:P({pid:29146,line:2,prog:'p1'}), c:null, out:[HELLO1]},
+    {label:'③', role:'fork()',
+     cap:'第 3 行。OS 複製出一個新行程，PID 是 <b>29147</b>。子行程拿到父行程的完整副本。',
+     p:P({pid:29146,line:3,prog:'p1'}), c:P({pid:29147,line:3,prog:'p1'}), out:[HELLO1]},
+    {label:'④', role:'同一行，兩個回傳值',
+     cap:'<b>fork() 回傳兩次</b>：父拿到子的 PID <b>29147</b>，子拿到 <b>0</b>。'
+        +'而且子行程不是從 main() 開頭跑，是從 fork() 的下一行活起來——所以 hello 不會再印一次。',
+     p:P({pid:29146,line:3,prog:'p1',rc:'29147'}), c:P({pid:29147,line:3,prog:'p1',rc:'0'}), out:[HELLO1]},
+    {label:'⑤', role:'兩個行程走不同的路',
+     cap:'同一份程式碼，rc 是 0 的走 <b>else if</b>（第 7 行），rc 不是 0 的走 <b>else</b>（第 9 行）。'
+        +'rc 就是它們分辨自己是誰的方法。',
+     p:P({pid:29146,line:9,prog:'p1',rc:'29147'}), c:P({pid:29147,line:7,prog:'p1',rc:'0'}), out:[HELLO1]}
+  ];
+  var parentPrint = {label:'⑥', role:'父行程印出來',
+     cap:'父行程本來就在 CPU 上，<b>printf</b> 幾百奈秒就做完了。',
+     p:P({pid:29146,line:10,prog:'p1',rc:'29147'}), c:P({pid:29147,line:7,prog:'p1',rc:'0'}),
+     out:[HELLO1, o('parent of 29147 (pid:29146)','bl')]};
+  var childPrint  = {label:'⑦', role:'子行程印出來',
+     cap:'子行程被排到之後才印。',
+     p:P({pid:29146,line:12,prog:'p1',rc:'29147'}), c:P({pid:29147,line:8,prog:'p1',rc:'0'}),
+     out:[HELLO1, o('parent of 29147 (pid:29146)','bl'), o('child (pid:29147)','cy')]};
+
+  var childFirstA = {label:'⑥', role:'子行程先印（少見）',
+     cap:'這一次子行程先被排到。<b>這也是合法的結果</b>——課本說順序不確定，指的就是這件事。',
+     p:P({pid:29146,line:9,prog:'p1',rc:'29147'}), c:P({pid:29147,line:8,prog:'p1',rc:'0'}),
+     out:[HELLO1, o('child (pid:29147)','cy')]};
+  var parentAfter = {label:'⑦', role:'父行程才印',
+     cap:'父行程後印。',
+     p:P({pid:29146,line:10,prog:'p1',rc:'29147'}), c:P({pid:29147,line:12,prog:'p1',rc:'0'}),
+     out:[HELLO1, o('child (pid:29147)','cy'), o('parent of 29147 (pid:29146)','bl')]};
+
+  var last = {label:'⑧', role:'順序沒有保證',
+     cap:'兩種順序都合法，OS 沒有承諾哪一個先。但實測跑 2000 次：'
+        +'<b>父先印 1998 次、子先印 2 次</b>。因為父行程已經在 CPU 上，子行程還要先被喚醒、被排到核心。'
+        +'不保證，不等於每次都不一樣。',
+     p:P({pid:29146,line:12,prog:'p1',rc:'29147',state:'done'}),
+     c:P({pid:29147,line:12,prog:'p1',rc:'0',state:'done'}),
+     out: childFirst ? [HELLO1, o('child (pid:29147)','cy'), o('parent of 29147 (pid:29146)','bl')]
+                     : [HELLO1, o('parent of 29147 (pid:29146)','bl'), o('child (pid:29147)','cy')]};
+
+  return base.concat(childFirst ? [childFirstA, parentAfter, last] : [parentPrint, childPrint, last]);
+}
+
+/* ============ p2.c ============ */
+var HELLO2 = o('hello (pid:29266)','bl');
+var P2 = [
+  {label:'①', role:'和 p1 只差一行', cap:'p2.c 和 p1.c 唯一的差別：父行程多呼叫了第 9 行的 <b>wait(NULL)</b>。',
+   p:P({pid:29266,line:1,prog:'p2'}), c:null, out:[]},
+  {label:'②', role:'印出 hello', cap:'第 2 行，一樣只印一次。',
+   p:P({pid:29266,line:2,prog:'p2'}), c:null, out:[HELLO2]},
+  {label:'③', role:'fork()', cap:'複製出子行程 <b>29267</b>。父拿到 29267，子拿到 0。',
+   p:P({pid:29266,line:3,prog:'p2',rc:'29267'}), c:P({pid:29267,line:3,prog:'p2',rc:'0'}), out:[HELLO2]},
+  {label:'④', role:'父行程走到 wait()', cap:'父行程走 else，第一件事就是呼叫 <b>wait(NULL)</b>。',
+   p:P({pid:29266,line:9,prog:'p2',rc:'29267'}), c:P({pid:29267,line:6,prog:'p2',rc:'0'}), out:[HELLO2]},
+  {label:'⑤', role:'父行程被擋住', cap:'<b>wait() 會阻塞父行程</b>，一直到子行程結束才返回。'
+     +'這段時間父行程完全不做事——狀態從「執行中」變成「阻塞」。',
+   p:P({pid:29266,line:9,prog:'p2',rc:'29267',state:'block'}), c:P({pid:29267,line:6,prog:'p2',rc:'0'}), out:[HELLO2]},
+  {label:'⑥', role:'子行程印出來', cap:'不管子行程什麼時候被排到，父行程都在等，所以<b>一定是子先印</b>。',
+   p:P({pid:29266,line:9,prog:'p2',rc:'29267',state:'block'}), c:P({pid:29267,line:7,prog:'p2',rc:'0'}),
+   out:[HELLO2, o('child (pid:29267)','cy')]},
+  {label:'⑦', role:'子行程變成殭屍', cap:'子行程 return 0 結束，但還不會馬上消失：'
+     +'它先停在<b>殭屍 ZOMBIE</b> 狀態，把回傳碼留著等父行程來讀。這就是第 4 章的伏筆。',
+   p:P({pid:29266,line:9,prog:'p2',rc:'29267',state:'block'}), c:P({pid:29267,line:13,prog:'p2',rc:'0',state:'zombie'}),
+   out:[HELLO2, o('child (pid:29267)','cy')]},
+  {label:'⑧', role:'wait() 返回', cap:'OS 通知父行程。<b>wait() 返回子行程的 PID</b>（29267），'
+     +'同時把殭屍清乾淨。父行程醒過來。',
+   p:P({pid:29266,line:9,prog:'p2',rc:'29267',state:'run'}), c:P({pid:29267,line:13,prog:'p2',rc:'0',state:'done'}),
+   out:[HELLO2, o('child (pid:29267)','cy')]},
+  {label:'⑨', role:'父行程才印', cap:'第 10 行，父行程印出 rc_wait。',
+   p:P({pid:29266,line:10,prog:'p2',rc:'29267'}), c:P({pid:29267,line:13,prog:'p2',rc:'0',state:'done'}),
+   out:[HELLO2, o('child (pid:29267)','cy'), o('parent of 29267 (rc_wait:29267) (pid:29266)','bl')]},
+  {label:'⑩', role:'順序變成確定的', cap:'只多了一行 <b>wait()</b>，輸出順序就從「沒有保證」變成「保證」。'
+     +'p1 是機率上幾乎固定，p2 是規則上保證固定——這兩件事不一樣。',
+   p:P({pid:29266,line:12,prog:'p2',rc:'29267',state:'done'}), c:P({pid:29267,line:13,prog:'p2',rc:'0',state:'done'}),
+   out:[HELLO2, o('child (pid:29267)','cy'), o('parent of 29267 (rc_wait:29267) (pid:29266)','bl')]}
+];
+
+/* ============ p3.c ============ */
+var P3 = [
+  {label:'①', role:'開始', cap:'p3.c 在 p2.c 上再加一件事：子行程要換成另一支程式。',
+   p:P({pid:29146,line:1,prog:'p3'}), c:null, out:[]},
+  {label:'②', role:'印出 hello', cap:'第 2 行。',
+   p:P({pid:29146,line:2,prog:'p3'}), c:null, out:[HELLO1]},
+  {label:'③', role:'fork()', cap:'複製出子行程 <b>29147</b>。',
+   p:P({pid:29146,line:3,prog:'p3',rc:'29147'}), c:P({pid:29147,line:3,prog:'p3',rc:'0'}), out:[HELLO1]},
+  {label:'④', role:'父等、子跑', cap:'父行程走到 wait() 卡住；子行程印出 child。',
+   p:P({pid:29146,line:15,prog:'p3',rc:'29147',state:'block'}), c:P({pid:29147,line:7,prog:'p3',rc:'0'}),
+   out:[HELLO1, o('child (pid:29147)','cy')]},
+  {label:'⑤', role:'準備要跑的程式', cap:'第 8–11 行把引數排好：<b>myargs[0]</b> 是程式名 wc，'
+     +'<b>myargs[1]</b> 是要數的檔案，最後一格一定要放 <b>NULL</b> 當結尾。',
+   p:P({pid:29146,line:15,prog:'p3',rc:'29147',state:'block'}), c:P({pid:29147,line:9,prog:'p3',rc:'0'}),
+   out:[HELLO1, o('child (pid:29147)','cy')]},
+  {label:'⑥', role:'execvp()：身上的程式被換掉', cap:'第 12 行。OS 載入 wc，'
+     +'把子行程的程式碼段、靜態資料、堆、堆疊<b>全部蓋掉</b>，然後直接跳到 wc 的進入點。'
+     +'注意 <b>PID 還是 29147</b>——沒有新行程，只是換了一支程式。',
+   p:P({pid:29146,line:15,prog:'p3',rc:'29147',state:'block'}), c:P({pid:29147,line:12,prog:'wc',rc:'—'}),
+   out:[HELLO1, o('child (pid:29147)','cy')], replaced:true},
+  {label:'⑦', role:'第 13 行永遠不會執行', cap:'那行 <b>printf("this shouldn\'t print out")</b> 不是被跳過——'
+     +'它的指令在 exec 成功的瞬間就被 wc 的程式碼蓋掉了，<b>已經不在記憶體裡</b>。'
+     +'所以成功的 exec() 不會返回：沒有東西可以返回。',
+   p:P({pid:29146,line:15,prog:'p3',rc:'29147',state:'block'}), c:P({pid:29147,line:0,prog:'wc',rc:'—'}),
+   out:[HELLO1, o('child (pid:29147)','cy')], replaced:true, dead:13},
+  {label:'⑧', role:'wc 跑出結果', cap:'wc 數完 p3.c：29 行、107 個字、1030 個位元組。'
+     +'這是 <b>wc</b> 印的，不是 p3.c 印的。',
+   p:P({pid:29146,line:15,prog:'p3',rc:'29147',state:'block'}), c:P({pid:29147,line:0,prog:'wc',rc:'—'}),
+   out:[HELLO1, o('child (pid:29147)','cy'), o('      29     107    1030 p3.c','am')], replaced:true},
+  {label:'⑨', role:'子結束、父醒來', cap:'子行程結束（先變殭屍），父行程的 <b>wait()</b> 返回並清掉它。',
+   p:P({pid:29146,line:15,prog:'p3',rc:'29147',state:'run'}), c:P({pid:29147,line:0,prog:'wc',state:'done'}),
+   out:[HELLO1, o('child (pid:29147)','cy'), o('      29     107    1030 p3.c','am')]},
+  {label:'⑩', role:'父行程印出來', cap:'最後父行程印出自己那一行。<b>fork 建立、exec 替換、wait 等待</b>，'
+     +'一支 shell 幫你跑指令時，做的就是這三件事。',
+   p:P({pid:29146,line:16,prog:'p3',rc:'29147',state:'done'}), c:P({pid:29147,line:0,prog:'wc',state:'done'}),
+   out:[HELLO1, o('child (pid:29147)','cy'), o('      29     107    1030 p3.c','am'),
+        o('parent of 29147 (rc_wait:29147) (pid:29146)','bl')]}
+];
+
+/* ============ p4.c ============ */
+var FD_DEFAULT = [['fd 0','鍵盤',''],['fd 1','螢幕',''],['fd 2','螢幕','']];
+var FD_CLOSED  = [['fd 0','鍵盤',''],['fd 1','（空的）','empty'],['fd 2','螢幕','']];
+var FD_FILE    = [['fd 0','鍵盤',''],['fd 1','./p4.output','hot'],['fd 2','螢幕','']];
+var P4 = [
+  {label:'①', role:'shell 怎麼做到 wc p4.c > p4.output', cap:'重定向不是 wc 的功能，wc 一個字都不用改。'
+     +'祕密在 <b>fork 和 exec 中間那個空檔</b>：shell 趁子行程還沒換程式之前，先動三行手腳。',
+   p:P({pid:29146,line:1,prog:'p4'}), c:null, out:[]},
+  {label:'②', role:'fork()', cap:'複製出子行程。連<b>開啟的檔案描述符</b>都複製了一份：'
+     +'0 是鍵盤、1 是螢幕、2 是錯誤訊息。',
+   p:P({pid:29146,line:2,prog:'p4',rc:'29147'}), c:P({pid:29147,line:2,prog:'p4',rc:'0'}), out:[], fds:FD_DEFAULT},
+  {label:'③', role:'close(STDOUT_FILENO)', cap:'第 4 行。子行程把 <b>fd 1</b>（標準輸出）關掉，'
+     +'1 號位置就空出來了。從這一刻起，子行程印東西不會到螢幕上。',
+   p:P({pid:29146,line:13,prog:'p4',rc:'29147',state:'block'}), c:P({pid:29147,line:4,prog:'p4',rc:'0'}),
+   out:[], fds:FD_CLOSED},
+  {label:'④', role:'open()：UNIX 的規則', cap:'第 5 行開檔。<b>UNIX 規定 open() 一定挑編號最小的空號</b>——'
+     +'現在最小的空號正好是 1，所以這個檔案就變成了標準輸出。整個重定向就是靠這條規則。',
+   p:P({pid:29146,line:13,prog:'p4',rc:'29147',state:'block'}), c:P({pid:29147,line:5,prog:'p4',rc:'0'}),
+   out:[], fds:FD_FILE, file:''},
+  {label:'⑤', role:'execvp()：程式換掉，但 fd 留著', cap:'第 12 行換成 wc。'
+     +'程式碼、堆、堆疊全部被蓋掉，<b>但檔案描述符會跨過 exec 保留下來</b>。'
+     +'wc 一啟動，它的 fd 1 就已經指向檔案了。',
+   p:P({pid:29146,line:13,prog:'p4',rc:'29147',state:'block'}), c:P({pid:29147,line:12,prog:'wc',rc:'—'}),
+   out:[], fds:FD_FILE, file:''},
+  {label:'⑥', role:'輸出進了檔案', cap:'wc 照常往 fd 1 寫，結果寫進了 <b>p4.output</b>。'
+     +'<b>終端機上什麼都沒有</b>——要 <code>cat p4.output</code> 才看得到。',
+   p:P({pid:29146,line:13,prog:'p4',rc:'29147',state:'block'}), c:P({pid:29147,line:0,prog:'wc',rc:'—'}),
+   out:[], fds:FD_FILE, file:'      32     109    1030 p4.c'},
+  {label:'⑦', role:'wc 完全不知情', cap:'wc 從頭到尾不知道自己的輸出被換掉了。'
+     +'shell 只在 <b>fork 和 exec 之間</b>動了三行，就做出了重定向——'
+     +'這就是為什麼 UNIX 要把建立和替換拆成兩個呼叫。管道也是同一招。',
+   p:P({pid:29146,line:16,prog:'p4',rc:'29147',state:'done'}), c:P({pid:29147,line:0,prog:'wc',state:'done'}),
+   out:[], fds:FD_FILE, file:'      32     109    1030 p4.c'}
+];
+
+/* ============ 組裝 ============ */
+var PROGS = [
+  OVERVIEW,
+  {id:'p1', name:'p1.c', sub:'fork()',            code:CODE_P1, steps:buildP1(false), swap:true},
+  {id:'p2', name:'p2.c', sub:'＋ wait()',          code:CODE_P2, steps:P2},
+  {id:'p3', name:'p3.c', sub:'＋ exec()',          code:CODE_P3, steps:P3},
+  {id:'p4', name:'p4.c', sub:'重定向',             code:CODE_P4, steps:P4}
+];
+
+/* ============ DOM ============ */
+var $ = function(id){ return document.getElementById(id); };
+var tabsEl=$('tabs'), stepsEl=$('steps'), codeEl=$('code'), ovEl=$('ov'), badgeEl=$('badge'),
+    termEl=$('term'), fileBox=$('filebox'), fileB=$('fileb'), fdsEl=$('fds'),
+    roleEl=$('role'), capEl=$('cap'), leftTitle=$('leftTitle'), swapBtn=$('swap'), termCard=$('termCard'),
+    ppEl=$('pp'), cpEl=$('cp');
+
+var prog=0, step=0, playing=false, timer=null, childFirst=false;
+
+/* ---- 分頁 ---- */
+PROGS.forEach(function(pg,i){
+  var b=document.createElement('button');
+  b.className='tab'; b.type='button'; b.setAttribute('role','tab');
+  b.innerHTML = pg.name + '<small>' + pg.sub + '</small>';
+  b.addEventListener('click', function(){ stopPlay(); setProg(i); });
+  tabsEl.appendChild(b);
+});
+
+function setProg(i){
+  prog=i; step=0;
+  Array.prototype.forEach.call(tabsEl.children, function(b,k){
+    b.setAttribute('aria-selected', k===i ? 'true' : 'false');
+  });
+  var pg=PROGS[i];
+  var isOv = pg.id==='ov';
+  ovEl.style.display   = isOv ? 'block' : 'none';
+  codeEl.style.display = isOv ? 'none'  : 'block';
+  leftTitle.textContent = isOv ? 'fork / exec / wait 的一生' : pg.name;
+  swapBtn.style.display = pg.swap ? 'inline-block' : 'none';
+  fdsEl.style.display   = (pg.id==='p4') ? 'flex' : 'none';
+  fileBox.style.display = (pg.id==='p4') ? 'block' : 'none';
+  termCard.style.display = isOv ? 'none' : 'block';
+  if(!isOv) renderCode(pg.code);
+  buildDots(pg.steps.length);
+  render();
+}
+
+function renderCode(lines){
+  codeEl.innerHTML = lines.map(function(l){
+    return '<div class="ln">' + (l===''? '&nbsp;' : hi(l)) + '</div>';
+  }).join('');
+}
+
+function buildDots(n){
+  stepsEl.innerHTML='';
+  for(var i=0;i<n;i++){
+    (function(i){
+      var d=document.createElement('button');
+      d.className='dot'; d.type='button'; d.title='第 '+(i+1)+' 步';
+      d.addEventListener('click', function(){ stopPlay(); step=i; render(); });
+      stepsEl.appendChild(d);
+    })(i);
+  }
+}
+
+/* ---- 畫面 ---- */
+function paintProc(box, ids, st, showRc){
+  if(!st){ box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  $(ids.pid).textContent = 'pid:' + st.pid;
+  var s = STATE[st.state] || STATE.run;
+  var chip = $(ids.state);
+  chip.className = 'chip ' + s[0];
+  chip.textContent = s[1];
+  $(ids.line).textContent = st.line ? ('第 ' + st.line + ' 行') : '—';
+  var pe = $(ids.prog);
+  pe.textContent = st.prog;
+  pe.className = (st.prog==='wc') ? 'hot' : '';
+  $(ids.rc).textContent = st.rc;
+  $(ids.rcK).style.opacity = showRc ? '1' : '.45';
+}
+
+function render(){
+  var pg=PROGS[prog], s=pg.steps[step];
+
+  Array.prototype.forEach.call(stepsEl.children, function(d,k){
+    d.setAttribute('aria-current', k===step ? 'true' : 'false');
+  });
+
+  roleEl.textContent = (s.label ? s.label + '　' : '') + s.role;
+  capEl.innerHTML = s.cap;
+
+  paintProc(ppEl, {pid:'pPid',state:'pState',line:'pLine',prog:'pProg',rc:'pRc',rcK:'pRcK'}, s.p, true);
+  paintProc(cpEl, {pid:'cPid',state:'cState',line:'cLine',prog:'cProg',rc:'cRc',rcK:'cRcK'}, s.c, true);
+
+  // 程式碼高亮
+  if(pg.id!=='ov'){
+    var lns = codeEl.children;
+    for(var i=0;i<lns.length;i++){
+      lns[i].className='ln';
+      var isDead = !!(s.dead && i+1===s.dead);
+      if(isDead) lns[i].classList.add('dead');
+      if(s.replaced && !isDead) lns[i].classList.add('dim');
+    }
+    var pl = s.p && s.p.line, cl = s.c && s.c.line;
+    if(pl && cl && pl===cl){ lns[pl-1] && lns[pl-1].classList.add('pc'); }
+    else {
+      if(pl && lns[pl-1]) lns[pl-1].classList.add('p');
+      if(cl && lns[cl-1]) lns[cl-1].classList.add('c');
+    }
+    badgeEl.classList.toggle('on', !!(s.replaced && !s.dead));
+  } else {
+    badgeEl.classList.remove('on');
+    paintOverview(step);
+  }
+
+  // 終端機
+  var out = s.out || [];
+  termEl.innerHTML = out.length
+    ? out.map(function(l){ return '<div class="l ' + l.c + '">' + esc(l.t) + '</div>'; }).join('')
+    : '<div class="empty">（還沒有輸出）</div>';
+
+  // fd 表 / 檔案
+  if(pg.id==='p4'){
+    var fds = s.fds || FD_DEFAULT;
+    ['fd0','fd1','fd2'].forEach(function(id,k){
+      var el=$(id);
+      el.className='fd' + (fds[k][2] ? ' ' + fds[k][2] : '');
+      el.querySelector('span').textContent = fds[k][1];
+    });
+    fileB.innerHTML = s.file ? '<span class="am">' + esc(s.file) + '</span>'
+                             : '<span style="color:#6f89a4">（空的）</span>';
+  }
+}
+
+function paintOverview(n){
+  var els = $('ovtrack').children;
+  for(var i=0;i<els.length;i++){
+    var el = els[i];
+    el.style.left = el.getAttribute('data-l') + '%';
+    if(el.getAttribute('data-w')) el.style.width = el.getAttribute('data-w') + '%';
+    el.classList.toggle('on', n >= +el.getAttribute('data-from'));
+  }
+}
+
+/* ---- 控制 ---- */
+function next(){ var n=PROGS[prog].steps.length; if(step<n-1){ step++; render(); return true; } return false; }
+function prev(){ if(step>0){ step--; render(); } }
+function stopPlay(){ playing=false; $('play').textContent='▶ 自動播放'; $('play').classList.add('primary'); clearTimeout(timer); }
+function schedule(){ clearTimeout(timer); timer=setTimeout(function(){
+  if(!next()) stopPlay(); else if(playing) schedule();
+}, 4200); }
+function play(){ if(step===PROGS[prog].steps.length-1){ step=0; render(); }
+  playing=true; $('play').textContent='⏸ 暫停'; $('play').classList.remove('primary'); schedule(); }
+
+$('prev').addEventListener('click', function(){ stopPlay(); prev(); });
+$('next').addEventListener('click', function(){ stopPlay(); next(); });
+$('play').addEventListener('click', function(){ playing ? stopPlay() : play(); });
+swapBtn.addEventListener('click', function(){
+  childFirst = !childFirst;
+  PROGS[1].steps = buildP1(childFirst);
+  swapBtn.textContent = childFirst ? '換回來（父先印）' : '換一種順序（子先印）';
+  stopPlay(); buildDots(PROGS[1].steps.length);
+  if(step >= PROGS[1].steps.length) step = PROGS[1].steps.length-1;
+  render();
+});
+document.addEventListener('keydown', function(e){
+  if(e.key==='ArrowRight'){ e.preventDefault(); stopPlay(); next(); }
+  else if(e.key==='ArrowLeft'){ e.preventDefault(); stopPlay(); prev(); }
+  else if(e.key===' '){ e.preventDefault(); playing ? stopPlay() : play(); }
+  else if(e.key>='1' && e.key<='5'){ e.preventDefault(); stopPlay(); setProg(+e.key-1); }
+});
+
+swapBtn.textContent = '換一種順序（子先印）';
+setProg(0);
+})();
+</script>
+</body>
+</html>

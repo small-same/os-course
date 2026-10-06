@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Proportional Share: Lottery and Stride</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{--sans:"Inter","Segoe UI",system-ui,sans-serif;}
+  :root{
+    --navy:#0E1B2E; --navy2:#132741; --panel:#183253; --panel2:#1d3c61;
+    --line:#284a70; --line2:#33587f;
+    --ink:#EAF1F8; --mute:#9FB6CF; --dim:#6f89a4;
+    --blue:#4A93D6; --cyan:#2DC7D8; --amber:#F2B84B; --green:#54C878; --red:#EA6B5E; --violet:#9B8CE8;
+    --mono:"IBM Plex Mono","Consolas",monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; min-height:100vh; color:var(--ink); font-family:var(--sans);
+    background:radial-gradient(1200px 700px at 50% -10%, #17304f 0%, rgba(23,48,79,0) 60%), var(--navy);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1240px; margin:0 auto; padding:clamp(16px,3vw,30px) clamp(14px,3vw,26px) 28px;
+    display:flex; flex-direction:column; gap:clamp(10px,1.8vh,16px);}
+  a{color:var(--cyan);}
+  code{font-family:var(--mono); font-size:.92em; color:var(--cyan);}
+
+  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--cyan); display:flex; align-items:center; gap:10px;}
+  .eyebrow::before{content:""; width:26px; height:2px; background:var(--cyan);}
+  h1{margin:4px 0 2px; font-weight:900; font-size:clamp(23px,3.6vw,34px); line-height:1.15;}
+  h1 span{color:var(--cyan);}
+  .sub{color:var(--mute); font-size:14px; line-height:1.6; margin:0;}
+
+  .tabs{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;}
+  .tabs button{font-family:var(--sans); font-size:13.5px; font-weight:700; color:var(--mute);
+    background:var(--navy2); border:1px solid var(--line); border-radius:999px;
+    padding:8px 16px; cursor:pointer; transition:.18s;}
+  .tabs button:hover{color:var(--ink); border-color:var(--line2);}
+  .tabs button[aria-selected="true"]{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+
+  .stage{background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.45));
+    border:1px solid var(--line); border-radius:16px; padding:clamp(14px,2.4vw,24px);}
+  .stagehead{display:flex; justify-content:space-between; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:14px;}
+  .stagehead h2{margin:0; font-size:clamp(17px,2.4vw,21px); font-weight:700;}
+  .stagehead .note{font-size:12.5px; color:var(--dim); font-family:var(--mono);}
+
+  .cols{display:grid; gap:14px; grid-template-columns:1fr 1fr;}
+  .cols.wide{grid-template-columns:1.55fr 1fr;}
+  .cols.side{grid-template-columns:330px 1fr;}
+  @media(max-width:960px){.cols,.cols.wide,.cols.side{grid-template-columns:1fr;}}
+
+  .box{background:var(--navy); border:1px solid var(--line); border-radius:12px; padding:14px 16px; min-width:0;}
+  #body > * + *{margin-top:14px;}
+  .box h3{margin:0 0 10px; font-size:13px; letter-spacing:.06em; color:var(--mute); font-weight:700;
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .hint{font-size:12px; color:var(--dim); line-height:1.55;}
+
+  .msg{margin-top:12px; border-left:3px solid var(--cyan); background:rgba(45,199,216,.07);
+    padding:11px 14px; border-radius:0 9px 9px 0; font-size:14px; line-height:1.7; min-height:62px;}
+  .msg.bad{border-left-color:var(--red); background:rgba(234,107,94,.08);}
+  .msg b{color:var(--cyan);} .msg.bad b{color:var(--red);}
+
+  button{font-family:var(--sans); cursor:pointer;}
+  .ctl{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px;}
+  .ctl button,.btn{font-family:var(--sans); font-size:13px; font-weight:700; color:var(--ink);
+    background:var(--panel); border:1px solid var(--line2); border-radius:9px; padding:8px 15px; transition:.16s;}
+  .ctl button:hover:not(:disabled),.btn:hover:not(:disabled){background:var(--panel2); border-color:var(--cyan);}
+  .ctl button:disabled,.btn:disabled{opacity:.35; cursor:default;}
+  .ctl .prim,.btn.prim{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+  .ctl .prim:hover:not(:disabled),.btn.prim:hover:not(:disabled){background:#51d8e6;}
+  .btn.sm{font-size:12px; padding:6px 11px;}
+  .ctl .voice[aria-pressed="true"]{background:var(--amber); border-color:var(--amber); color:#2a1d00;}
+  .dots{display:flex; gap:6px; margin-left:auto; flex-wrap:wrap;}
+  .dots i{width:8px; height:8px; border-radius:50%; background:var(--line2); cursor:pointer; transition:.2s;}
+  .dots i.on{background:var(--cyan); transform:scale(1.25);}
+
+  .seg{display:inline-flex; flex-wrap:wrap; border:1px solid var(--line2); border-radius:9px; overflow:hidden;}
+  .seg button{border:0; border-radius:0; background:var(--navy2); color:var(--mute); padding:7px 13px;
+    font-size:12.5px; font-weight:700;}
+  .seg button:hover{color:var(--ink);}
+  .seg button[aria-pressed="true"]{background:var(--amber); color:#2a1d00;}
+  .chips{display:flex; flex-wrap:wrap; gap:6px;}
+  .chips button{font-size:12px; font-family:var(--sans); background:var(--navy2); color:var(--mute);
+    border:1px solid var(--line); border-radius:7px; padding:6px 10px; font-weight:600;}
+  .chips button:hover{color:var(--cyan); border-color:var(--cyan);}
+  .chips button[aria-pressed="true"]{color:#06202c; background:var(--cyan); border-color:var(--cyan);}
+
+  .field{display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--mute);}
+  input[type=number],select{background:var(--navy2); border:1px solid var(--line); border-radius:7px;
+    color:var(--ink); font-family:var(--mono); font-size:13px; padding:6px 8px; text-align:center;}
+  input[type=number]{width:66px;}
+  input[type=number]:focus,select:focus{outline:none; border-color:var(--cyan);}
+  input[type=range]{accent-color:var(--cyan);}
+
+  table.r{width:100%; border-collapse:collapse; font-size:13px;}
+  table.r th,table.r td{border:1px solid var(--line); padding:7px 9px; text-align:center;}
+  table.r th{background:var(--panel); color:var(--mute); font-size:11.5px; font-weight:700;}
+  table.r td{font-family:var(--mono);}
+  table.r tr.hl td{background:rgba(45,199,216,.12);}
+
+  .term{background:#08131f; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+    font-family:var(--mono); font-size:12.5px; line-height:1.65; color:#cfe3f5; white-space:pre-wrap;}
+
+  .job{display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:24px; padding:0 6px;
+    border-radius:6px; font-weight:700; font-size:12.5px; color:#02121f; font-family:var(--mono);}
+
+  footer{color:var(--dim); font-family:var(--mono); font-size:11.5px; line-height:1.7; margin-top:6px;}
+  .kbd{font-family:var(--mono); font-size:11px; background:var(--panel); border:1px solid var(--line2);
+    border-radius:5px; padding:1px 6px; color:var(--mute);}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important;}}
+
+  
+  .nl{position:relative; margin:26px 0 8px;}
+  .nl-bar{display:flex; height:38px; border-radius:8px; overflow:hidden; border:1px solid var(--line);}
+  .nl-bar div{display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:12px; font-weight:700;
+    color:#02121f; white-space:nowrap; overflow:hidden; border-right:1px solid rgba(0,0,0,.25);}
+  .nl-mark{position:absolute; top:-24px; transform:translateX(-50%); transition:left .55s cubic-bezier(.5,.05,.3,1);
+    font-family:var(--mono); font-size:12px; color:var(--ink); font-weight:700; text-align:center; pointer-events:none;}
+  .nl-mark::after{content:""; display:block; margin:2px auto 0; width:2px; height:52px; background:var(--ink); box-shadow:0 0 8px rgba(234,241,248,.6);}
+  .nl-axis{display:flex; justify-content:space-between; font-family:var(--mono); font-size:10.5px; color:var(--dim); margin-top:4px;}
+  .tix{display:flex; gap:14px; flex-wrap:wrap; align-items:center;}
+  .tix label{display:inline-flex; align-items:center; gap:7px;}
+  .btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;}
+  .sharebar{position:relative; height:12px; background:var(--navy2); border-radius:6px; overflow:hidden; min-width:90px;}
+  .sharebar i{position:absolute; left:0; top:0; bottom:0; border-radius:6px;}
+  .sharebar em{position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--ink);}
+  .recent{display:flex; flex-wrap:wrap; gap:6px; font-family:var(--mono); font-size:12px;}
+  .recent span{display:inline-flex; align-items:center; gap:5px; background:var(--navy2); border:1px solid var(--line); border-radius:7px; padding:3px 7px;}
+  svg text{font-family:var(--mono); font-size:11px; fill:#6f89a4;}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--mute); margin-top:6px; align-items:center;}
+  .legend i{display:inline-block; width:14px; height:3px; border-radius:2px; margin-right:5px; vertical-align:middle;}
+
+  
+  .code{background:#08131f; border:1px solid var(--line); border-radius:10px; padding:10px 0; font-family:var(--mono); font-size:12.5px; line-height:1.75;}
+  .code .ln{display:block; padding:0 14px; white-space:pre; color:#cfe3f5; border-left:3px solid transparent;}
+  .code .ln .cm{color:#7C93AB; font-style:italic;}
+  .code .ln.hl{background:rgba(45,199,216,.14); border-left-color:var(--cyan);}
+  .list{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:6px 0 4px;}
+  .node{border:1px solid var(--line2); border-radius:9px; padding:8px 12px; background:var(--navy2); text-align:center; min-width:84px; transition:.25s;}
+  .node .nm{font-weight:900; font-size:16px;}
+  .node .tk{font-family:var(--mono); font-size:11.5px; color:var(--mute);}
+  .node.cur{border-color:var(--cyan); background:rgba(45,199,216,.14); box-shadow:0 0 0 1px rgba(45,199,216,.4);}
+  .node.win{border-color:var(--green); background:rgba(84,200,120,.16); box-shadow:0 0 0 1px rgba(84,200,120,.5);}
+  .node.past{opacity:.55;}
+  .arrow{color:var(--dim); font-family:var(--mono);}
+  .bigval{display:flex; gap:22px; flex-wrap:wrap; margin-top:12px; font-family:var(--mono);}
+  .bigval div{font-size:12px; color:var(--dim);}
+  .bigval b{display:block; font-size:24px; color:var(--ink); margin-top:2px;}
+  .cmp{margin-top:10px; font-size:14px;}
+
+  
+  .race{display:flex; flex-direction:column; gap:8px; margin-top:8px;}
+  .lanebar{display:grid; grid-template-columns:28px 1fr 74px; gap:10px; align-items:center; font-family:var(--mono); font-size:12.5px;}
+  .lanebar .tr{height:22px; background:var(--navy2); border:1px solid var(--line); border-radius:6px; overflow:hidden;}
+  .lanebar .tr i{display:block; height:100%; transition:width .12s linear;}
+
+  
+  .tbl{max-height:360px; overflow:auto; border:1px solid var(--line); border-radius:9px;}
+  .tbl table.r{margin:0;}
+  .tbl table.r th{position:sticky; top:0; z-index:1;}
+  td.min{color:var(--cyan); font-weight:700; background:rgba(45,199,216,.08);}
+  .runs{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; font-family:var(--mono); font-size:13px; align-items:center;}
+
+  /* ---- nice ---- */
+  .nicecards{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px;}
+  .nc{border:1px solid var(--line); border-radius:11px; padding:14px; background:var(--navy2);}
+  .nc .top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .nc .w{font-family:var(--mono); font-size:13px; color:var(--mute); margin-top:8px;}
+  .nc .pc{font-family:var(--mono); font-size:28px; font-weight:700; margin-top:4px;}
+  .wtable{display:flex; flex-wrap:wrap; gap:5px; font-family:var(--mono); font-size:11px;}
+  .wtable span{border:1px solid var(--line); border-radius:6px; padding:3px 6px; color:var(--dim);}
+  .wtable span.on{border-color:var(--cyan); color:var(--ink); background:rgba(45,199,216,.12);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">OSTEP Chapter 9 · Week 4</div>
+  <h1><span>Proportional share</span> lottery and stride scheduling</h1>
+  <p class="sub">Not turnaround or response time this time: the goal is to give each job a set share of the CPU. Hold your own lottery, walk through Figure 9.1, see how fairness changes with job length, then try stride scheduling and Linux nice values.</p>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="stage">
+    <div class="stagehead"><h2 id="ttl"></h2><div class="note" id="note"></div></div>
+    <div id="body"></div>
+    <div class="msg" id="msg"></div>
+    <div class="ctl">
+      <button id="prev">← Back</button>
+      <button id="next" class="prim">Next →</button>
+      <button id="play">▶ Play</button>
+      <button id="reset">Start over</button>
+      <button id="voice" class="voice" aria-pressed="false">🔈 Read aloud: off</button>
+      <span id="extra"></span>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+  <footer>Keys: <span class="kbd">←</span> <span class="kbd">→</span> step · <span class="kbd">Space</span> play · <span class="kbd">R</span> start over<br>Course programs <code>code/W4/lottery.c</code>, <code>fairness.c</code>, <code>stride.c</code>, <code>nice_share.c</code> · Book: OSTEP Chapter 9<br>Shu-Te University · Dept. of Computer Science & Information Engineering · Operating Systems</footer>
+</div>
+<script>
+"use strict";
+var T = {"title":"Proportional Share: Lottery and Stride","eyebrow":"OSTEP Chapter 9 · Week 4","h1":"<span>Proportional share<\/span> lottery and stride scheduling","sub":"Not turnaround or response time this time: the goal is to give each job a set share of the CPU. Hold your own lottery, walk through Figure 9.1, see how fairness changes with job length, then try stride scheduling and Linux nice values.","footer":"Course programs <code>code/W4/lottery.c<\/code>, <code>fairness.c<\/code>, <code>stride.c<\/code>, <code>nice_share.c<\/code> · Book: OSTEP Chapter 9","tabs":["① The draw","② Figure 9.1 step by step","③ Is it fair?","④ Stride scheduling","⑤ nice and weights"],"tabTtl":["Tickets are your share: more draws, closer shares","Figure 9.1: add up the counter to find the winner","Figure 9.2: longer jobs are fairer","Figure 9.3: always run the smallest pass, no luck involved","Real Linux: nice becomes a weight, and the CPU is shared by weight"],"tabNote":["OSTEP §9.1","OSTEP §9.3","OSTEP §9.4","OSTEP §9.6","code/W4/nice_share.c"],"lot":{"tickets":"Tickets (change a number to change the shares)","tixNote":"C = 0 means no job C","draw1":"Draw once","drawN":"Draw %n times","chart":"How the shares change (x-axis: number of draws, log scale)","legend":"<span><i style='background:#4A93D6'><\/i>A's share<\/span><span><i style='background:#F2B84B'><\/i>B's share<\/span><span>dashed = the share it should get<\/span>","result":"Result (%n draws)","cols":["tickets","should get","wins","real","real vs. should"],"recent":"Last 20 draws (number → winner)","none":"no draws yet","xLabel":"draws","intro":"The book's example: A holds 75 tickets and B holds 25, 100 in total. Numbers 0 to 74 belong to A and 75 to 99 belong to B. Every time slice we draw a number from 0 to 99, and the owner of that number runs. Press \"Draw once\" to see where the number lands, then draw 20 or 1,000 times and watch the shares.","after":"After %n draws: ","part":"%j won %k times (%p%, should get %q%)","sep":"; ","end":". ","few":"With only a few draws, the shares can be far off. In the book, B won only 4 of 20 draws (20%).","many":"The more we draw, the closer we get to the right shares. Randomness is only right on average: that is the law of large numbers."},"walk":{"tk":"tickets","cmp":"counter = %c. Is %c > %w?","yes":"yes, stop","no":"no, keep going","winTxt":"current stops at %n: %n wins","codeTitle":"Figure 9.1 · the lottery scheduling decision","listTitle":"The job list and the counter","lineNote":"Numbers 0 to 399 are given to the jobs in list order. Whoever owns the winning number wins.","random":"random number","mStart":"First draw a number: <b>winner = %w<\/b> (0 to 399). The counter starts at 0, and current points to the first job in the list. Now walk down the list and add each job's tickets to the counter.","mMiss":"At <b>%name<\/b>: add its %t tickets, and the counter becomes <b>%c<\/b>. Is %c bigger than %w? <b>No<\/b>, so move on to the next job.","mHit":"At <b>%name<\/b>: add its %t tickets, and the counter becomes <b>%c<\/b>. Is %c bigger than %w? <b>Yes<\/b>, so the loop stops here.","mWin":"<b>%name wins<\/b> and runs in the next time slice. The counter just finds which part of the numbers the winner falls in. C owns 250 of the 400 numbers, so it wins about 62.5% of the draws: exactly its share of the tickets. Now try \"C → A → B\" above.","mWinSorted":"With the biggest ticket holder first (C → A → B), the same winning number %w now picks <b>%name<\/b>. That's fine: each job still owns the same amount of numbers, so the chances don't change. Sorting just makes the loop stop after one or two steps, which is faster."},"fair":{"chart":"Figure 9.2 · average F and job length R","trials":"runs per R","rerun":"run again","avg":"average F","each":"each run","raceTitle":"Watch one race","go":"▶ Go","table":"Average F","metric":"average F","formula":"Fairness metric F = (time the first job finishes) / (time the second job finishes). F = 1 means they finish together.","xLabel":"job length R","intro":"Two jobs with the same tickets (100 each), each R time slices long, with a lottery every time slice. <b>F = first finish time / second finish time<\/b>, and closer to 1 is fairer. When R = 1, F is always 0.5: one job finishes at time 1 and the other at time 2. As jobs get longer, the luck evens out and F climbs toward 1. That is <b>Figure 9.2<\/b> in your book.","raceDone":"This race with R = %R: the first job finished at time %f and the second at time %s, so <b>F = %f / %s = %u<\/b>. Press Go a few more times: with a small R every race is different; with a large R almost every race is close to 1.","raceHint":"Pick R and press Go: the two jobs draw and run, and we see who finishes first.","firstAt":"first job done at time %f"},"stride":{"who":"who runs","now":"Pass right now:","sep":", ","runFmt":"%n× (should get %q%)","tableTitle":"Figure 9.3 · each row shows the passes before the decision, and who runs","ran":"%n turns:","rule":"Stride scheduling (the book's pseudocode)","tickets":"A, B and C have 100, 50 and 250 tickets → stride = 10000 / tickets = 100, 200 and 40. More tickets, smaller stride. On a tie, the job listed first runs.","one":"Run once","eight":"Run 8 times","newJob":"A new job D arrives (100 tickets, stride 100)","newHint":"What should D's pass be? Run a few rounds first so the passes grow, then add D and compare the two choices.","d0":"Add D with pass = 0","dmin":"Add D with pass = current smallest","intro":"Stride scheduling uses no luck at all. Every time, the job with the <b>smallest pass<\/b> runs for one time slice, and then its stride is added to its pass. Press \"Run once\" to see it row by row, or \"Run 8 times\".","progress":"%n turns so far. In each row, the highlighted cell is the smallest pass: that job was picked.","eightDone":"After 8 turns: <b>C ran 5 times, A twice, and B once<\/b>. 5 : 2 : 1 is exactly 250 : 100 : 50. Now all three passes are 200 again, so the same pattern repeats. Lottery reaches the right shares only on average over time; stride gets them exactly right at the end of every round.","added0":"D arrives with pass <b>0<\/b>. Everyone else already has a big pass, so D is far behind. Press \"Run 8 times\" and see what happens.","addedMin":"D arrives with the current smallest pass, <b>%p<\/b>. Press \"Run 8 times\" and see how D takes turns with the others.","after0":"D always has the smallest pass and <b>ran %k times in a row<\/b> (%d in total), while the others wait until D catches up. This is why stride scheduling needs global state: a new job's pass is hard to set. Lottery doesn't have this problem: a new job just adds its tickets to the total.","afterMin":"D starts from the current smallest pass and shares fairly from the start (D ran %d times). But to do this, the scheduler must know the other jobs' passes: that is the global state stride scheduling needs."},"nice":{"weight":"weight","cardsTitle":"Two processes that only compute, sharing one CPU","real05":"Measured (code/W4/nice_share.c, locked to one CPU for 3 seconds): A 75.2%, B 24.8%, almost exactly what the weights say.","realEq":"Same nice value, same weight, half each (measured 50.2% : 49.8%).","tableTitle":"The Linux weight table (nice -20 to 19)","tableNote":"Each step of nice changes the weight by about 1.25 times; nice 0 is 1024. A bigger nice is \"nicer\" and has a smaller weight. Section 9.7 of your book shows this table.","howTitle":"How it is computed","how":"A's share = A's weight / (A's weight + B's weight)\n\nnice 0 → 1024, nice 5 → 335\n1024 / (1024 + 335) = 75.3%\n\nA weight works like a number of tickets:\nLinux doesn't hold a lottery; it shares\nthe CPU time in proportion to the weights.","intro":"How does real Linux share the CPU by proportion? It turns each <b>nice value into a weight<\/b> and shares the CPU by weight. Nice 0 has weight 1024 and nice 5 has weight 335, so A should get 1024 / (1024 + 335) ≈ <b>75%<\/b> and B ≈ <b>25%<\/b>: the same 75 : 25 as the lottery example. Chapter 8 calls nice \"advice\" to the OS; on Linux, the advice is a weight. Change the two nice values and see.","after":"Now A should get <b>%a%<\/b> and B should get <b>%b%<\/b>. On Linux you can measure it with a command like <code>./nice_share 10<\/code>."},"ui":{"htmlLang":"en","fonts":"<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap\">","sans":"\"Inter\",\"Segoe UI\",system-ui,sans-serif","prev":"← Back","next":"Next →","play":"▶ Play","pause":"❚❚ Pause","reset":"Start over","voiceOff":"🔈 Read aloud: off","voiceOn":"🔊 Read aloud: on","noVoice":"No English voice on this computer","voiceLang":"en-US","voiceRate":0.95,"msPerChar":70,"keys":"Keys: <span class=\"kbd\">←<\/span> <span class=\"kbd\">→<\/span> step · <span class=\"kbd\">Space<\/span> play · <span class=\"kbd\">R<\/span> start over","colon":": ","listSep":", ","school":"Shu-Te University · Dept. of Computer Science & Information Engineering · Operating Systems"}};
+
+var $ = function(id){ return document.getElementById(id); };
+var esc = function(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+var each = function(list, fn){ Array.prototype.forEach.call(list, fn); };
+var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+var JOBCOLOR = { A:"#4A93D6", B:"#F2B84B", C:"#2DC7D8", D:"#54C878", E:"#9B8CE8" };
+function jobChip(name, extra){ return "<span class='job' style='background:" + (JOBCOLOR[name] || "#9FB6CF") + "'" + (extra || "") + ">" + name + "</span>"; }
+function pct(part, whole){ return whole ? Math.round(1000 * part / whole) / 10 : 0; }
+function fill(s, map){ return String(s).replace(/%(\w+)/g, function(m, k){ return Object.prototype.hasOwnProperty.call(map, k) ? map[k] : m; }); }
+
+var TABS = [], tab = 0, step = 0;
+var playing = false, playTimer = null;
+var speech = { ok:("speechSynthesis" in window), on:false, voice:null, last:"", token:0 };
+
+function setMsg(html, bad){ var m = $("msg"); m.className = "msg" + (bad ? " bad" : ""); m.innerHTML = html; }
+function setExtra(html){ $("extra").innerHTML = html; }
+
+function render(){
+  var tb = TABS[tab];
+  var n = tb.stepped ? tb.len() : 1;
+  if(step > n - 1) step = n - 1;
+  if(step < 0) step = 0;
+  $("ttl").innerHTML = tb.ttl;
+  $("note").textContent = tb.note || "";
+  setExtra("");
+  tb.render(step);
+  $("prev").disabled = !tb.stepped || step === 0;
+  $("next").disabled = !tb.stepped || step >= n - 1;
+  ["prev", "next", "reset", "play"].forEach(function(id){ $(id).style.display = tb.stepped ? "" : "none"; });
+  $("play").textContent = playing ? T.ui.pause : T.ui.play;
+  $("dots").innerHTML = tb.stepped
+    ? Array.apply(null, Array(n)).map(function(_, i){ return "<i class='" + (i === step ? "on" : "") + "' data-d='" + i + "'></i>"; }).join("")
+    : "";
+  each($("dots").querySelectorAll("[data-d]"), function(d){
+    d.addEventListener("click", function(){ stopPlay(); step = +d.getAttribute("data-d"); render(); });
+  });
+  each($("tabs").children, function(b, i){ b.setAttribute("aria-selected", i === tab ? "true" : "false"); });
+  try { history.replaceState(null, "", "#tab=" + (tab + 1) + (tb.stepped ? "&step=" + (step + 1) : "")); } catch(e) {}
+  if(tb.stepped) narrate();
+}
+function readHash(){                                  
+  var m = /tab=(\d+)/.exec(location.hash || ""), k = /step=(\d+)/.exec(location.hash || "");
+  if(m && +m[1] >= 1 && +m[1] <= TABS.length) tab = +m[1] - 1;
+  if(k && +k[1] >= 1) step = +k[1] - 1;
+}
+
+
+function pickVoice(){
+  if(!speech.ok) { $("voice").style.display = "none"; return; }
+  var vs = window.speechSynthesis.getVoices() || [];
+  var want = T.ui.voiceLang.toLowerCase(), pre = want.split("-")[0];
+  var norm = function(v){ return (v.lang || "").toLowerCase().replace("_", "-"); };
+  var exact = vs.filter(function(v){ return norm(v) === want; });
+  var loose = vs.filter(function(v){ return norm(v).indexOf(pre) === 0; });
+  speech.voice = exact[0] || loose[0] || null;
+  $("voice").disabled = !speech.voice;
+  $("voice").title = speech.voice ? speech.voice.name : T.ui.noVoice;
+}
+function chunks(text){
+  var parts = text.match(/[^\u3002\uff01\uff1f\uff1b.!?;]+[\u3002\uff01\uff1f\uff1b.!?;]*/g) || [text], out = [], buf = "";
+  parts.forEach(function(p){
+    if((buf + p).length > 150 && buf){ out.push(buf); buf = p; } else buf += p;
+  });
+  if(buf.trim()) out.push(buf);
+  return out;
+}
+function speakNow(text, done){
+  var my = ++speech.token;
+  window.speechSynthesis.cancel();
+  var parts = chunks(text), i = 0;
+  (function next(){
+    if(my !== speech.token) return;
+    if(i >= parts.length){ if(done) done(); return; }
+    var u = new SpeechSynthesisUtterance(parts[i++]);
+    u.voice = speech.voice; u.lang = speech.voice.lang; u.rate = T.ui.voiceRate;
+    u.onend = next;
+    u.onerror = function(){ if(my === speech.token && done) done(); };
+    window.speechSynthesis.speak(u);
+  })();
+}
+function msgText(){ return ($("msg").textContent || "").replace(/\s+/g, " ").trim(); }
+function narrate(){
+  var text = msgText();
+  if(playing){
+    clearTimeout(playTimer);
+    var go = function(){ if(playing) playTimer = setTimeout(advance, 650); };
+    if(speech.on && speech.voice) speakNow(text, go);
+    else playTimer = setTimeout(advance, Math.min(16000, Math.max(2400, text.length * T.ui.msPerChar)));
+    speech.last = text;
+    return;
+  }
+  if(speech.on && speech.voice && text && text !== speech.last){ speech.last = text; speakNow(text, null); }
+}
+function sayMsg(){                                  
+  if(speech.on && speech.voice){ speech.last = msgText(); speakNow(speech.last, null); }
+}
+function stopSpeech(){ speech.token++; if(speech.ok) window.speechSynthesis.cancel(); }
+function advance(){
+  var tb = TABS[tab];
+  if(!tb.stepped || step >= tb.len() - 1){ stopPlay(); return; }
+  step++; render();
+}
+function stopPlay(){ playing = false; clearTimeout(playTimer); $("play").textContent = T.ui.play; }
+function togglePlay(){
+  if(!TABS[tab].stepped) return;
+  if(playing){ stopPlay(); stopSpeech(); return; }
+  playing = true;
+  if(step >= TABS[tab].len() - 1) step = 0;
+  render();
+}
+
+function startEngine(tabs){
+  TABS = tabs;
+  $("tabs").innerHTML = TABS.map(function(t){ return "<button role='tab'>" + t.name + "</button>"; }).join("");
+  each($("tabs").children, function(b, i){
+    b.addEventListener("click", function(){ stopPlay(); stopSpeech(); speech.last = ""; tab = i; step = 0; if(TABS[i].enter) TABS[i].enter(); render(); });
+  });
+  $("prev").addEventListener("click", function(){ stopPlay(); if(step > 0){ step--; render(); } });
+  $("next").addEventListener("click", function(){ stopPlay(); if(step < TABS[tab].len() - 1){ step++; render(); } });
+  $("reset").addEventListener("click", function(){ stopPlay(); step = 0; render(); });
+  $("play").addEventListener("click", togglePlay);
+  $("voice").addEventListener("click", function(){
+    speech.on = !speech.on;
+    $("voice").setAttribute("aria-pressed", speech.on ? "true" : "false");
+    $("voice").textContent = speech.on ? T.ui.voiceOn : T.ui.voiceOff;
+    if(speech.on){ speech.last = ""; if(TABS[tab].stepped && !playing) narrate(); else sayMsg(); }
+    else stopSpeech();
+  });
+  document.addEventListener("keydown", function(e){
+    var tag = (e.target && e.target.tagName) || "";
+    if(tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if(e.key === "ArrowLeft"){ stopPlay(); if(step > 0){ step--; render(); } }
+    else if(e.key === "ArrowRight"){ stopPlay(); if(TABS[tab].stepped && step < TABS[tab].len() - 1){ step++; render(); } }
+    else if(e.key === "r" || e.key === "R"){ stopPlay(); step = 0; render(); }
+    else if(e.key === " " && TABS[tab].stepped){ e.preventDefault(); togglePlay(); }
+  });
+  if(speech.ok){ pickVoice(); window.speechSynthesis.onvoiceschanged = pickVoice; }
+  else $("voice").style.display = "none";
+  readHash();
+  if(TABS[tab].enter) TABS[tab].enter();
+  render();
+}
+
+var NAMES = ["A", "B", "C"];
+function rnd(n){ return Math.floor(Math.random() * n); }
+function fmt(n){ return n.toLocaleString("en-US"); }
+
+
+var lot = { tix:[75, 25, 0], n:0, cnt:[0, 0, 0], hist:null, last:null, recent:[] };
+var LOTMAX = 100000;
+function lotReset(){
+  lot.n = 0; lot.cnt = [0, 0, 0]; lot.last = null; lot.recent = [];
+  lot.hist = [new Int32Array(LOTMAX + 1), new Int32Array(LOTMAX + 1), new Int32Array(LOTMAX + 1)];
+}
+lotReset();
+function lotTotal(){ return lot.tix[0] + lot.tix[1] + lot.tix[2]; }
+function lotWinner(num){                                     
+  var c = 0;
+  for(var j = 0; j < 3; j++){ c += lot.tix[j]; if(c > num) return j; }
+  return 2;
+}
+function lotDraw(k){
+  var tot = lotTotal();
+  if(!tot) return;
+  for(var i = 0; i < k && lot.n < LOTMAX; i++){
+    var num = rnd(tot), w = lotWinner(num);
+    lot.cnt[w]++; lot.n++;
+    for(var j = 0; j < 3; j++) lot.hist[j][lot.n] = lot.cnt[j];
+    lot.last = num;
+    lot.recent.push([num, w]); if(lot.recent.length > 20) lot.recent.shift();
+  }
+}
+function numberLine(items, mark){                            
+  var tot = items.reduce(function(a, x){ return a + x[1]; }, 0), start = 0, segs = "";
+  items.forEach(function(x){
+    var t = x[1];
+    if(!t) return;
+    var lbl = x[0] + " " + start + "–" + (start + t - 1);
+    segs += "<div style='flex:" + t + ";background:" + JOBCOLOR[x[0]] + "'>" + (t / tot > .12 ? lbl : x[0]) + "</div>";
+    start += t;
+  });
+  var mk = mark == null ? "" : "<div class='nl-mark' style='left:" + ((mark + .5) / tot * 100) + "%'>" + mark + "</div>";
+  return "<div class='nl'>" + mk + "<div class='nl-bar'>" + segs + "</div><div class='nl-axis'><span>0</span><span>" + (tot - 1) + "</span></div></div>";
+}
+function lotChart(){
+  var W = 640, H = 230, padL = 40, padB = 26, padT = 10, padR = 12, n = lot.n;
+  var xmax = Math.max(10, n), lx = function(v){ return padL + (Math.log10(v) / Math.log10(xmax)) * (W - padL - padR); };
+  var y = function(p){ return padT + (1 - p) * (H - padT - padB); };
+  var s = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' style='display:block'>";
+  [0, .25, .5, .75, 1].forEach(function(p){
+    s += "<line x1='" + padL + "' x2='" + (W - padR) + "' y1='" + y(p) + "' y2='" + y(p) + "' stroke='#284a70' stroke-width='1'/>" +
+         "<text x='" + (padL - 6) + "' y='" + (y(p) + 4) + "' text-anchor='end'>" + (p * 100) + "%</text>";
+  });
+  for(var d = 1; d <= xmax; d *= 10){
+    s += "<line x1='" + lx(d) + "' x2='" + lx(d) + "' y1='" + padT + "' y2='" + (H - padB) + "' stroke='#1d3c61' stroke-width='1'/>" +
+         "<text x='" + lx(d) + "' y='" + (H - 8) + "' text-anchor='middle'>" + fmt(d) + "</text>";
+  }
+  var tot = lotTotal();
+  [0, 1, 2].forEach(function(j){
+    if(!lot.tix[j]) return;
+    var col = JOBCOLOR[NAMES[j]], tgt = lot.tix[j] / tot;
+    s += "<line x1='" + padL + "' x2='" + (W - padR) + "' y1='" + y(tgt) + "' y2='" + y(tgt) + "' stroke='" + col + "' stroke-dasharray='5 5' opacity='.55'/>";
+    if(n >= 1){
+      var pts = [], last = -1;
+      for(var i = 0; i <= 160; i++){
+        var k = Math.max(1, Math.round(Math.pow(n, i / 160)));
+        if(k === last) continue; last = k;
+        pts.push(lx(k).toFixed(1) + "," + y(lot.hist[j][k] / k).toFixed(1));
+      }
+      s += "<polyline points='" + pts.join(" ") + "' fill='none' stroke='" + col + "' stroke-width='2.2'/>";
+    }
+  });
+  s += "<text x='" + (W - padR - 4) + "' y='" + (H - padB - 7) + "' text-anchor='end'>" + T.lot.xLabel + " →</text></svg>";
+  return s;
+}
+function renderLot(){
+  var tot = lotTotal();
+  var rows = [0, 1, 2].filter(function(j){ return lot.tix[j] > 0; }).map(function(j){
+    var tg = pct(lot.tix[j], tot), act = pct(lot.cnt[j], lot.n), col = JOBCOLOR[NAMES[j]];
+    return "<tr><td>" + jobChip(NAMES[j]) + "</td><td>" + lot.tix[j] + "</td><td>" + tg + "%</td><td>" + fmt(lot.cnt[j]) + "</td><td>" + (lot.n ? act + "%" : "—") +
+      "</td><td style='width:34%'><div class='sharebar'><i style='width:" + (lot.n ? act : 0) + "%;background:" + col + "'></i><em style='left:" + tg + "%'></em></div></td></tr>";
+  }).join("");
+  $("body").innerHTML =
+    "<div class='cols wide'><div>" +
+      "<div class='box'><h3>" + T.lot.tickets + "</h3><div class='tix'>" +
+        [0, 1, 2].map(function(j){ return "<label>" + jobChip(NAMES[j]) + "<input type='number' min='0' max='1000' value='" + lot.tix[j] + "' data-tix='" + j + "'></label>"; }).join("") +
+        "<span class='hint'>" + T.lot.tixNote + "</span></div>" +
+        numberLine(lot.tix.map(function(t, j){ return [NAMES[j], t]; }), lot.last) +
+        "<div class='btns'><button class='btn prim' data-draw='1'>" + T.lot.draw1 + "</button>" +
+        [20, 100, 1000, 10000].map(function(k){ return "<button class='btn' data-draw='" + k + "'>" + fill(T.lot.drawN, { n:fmt(k) }) + "</button>"; }).join("") +
+        "<button class='btn' id='lotreset'>" + T.ui.reset + "</button></div></div>" +
+      "<div class='box'><h3>" + T.lot.chart + "</h3>" + lotChart() + "<div class='legend'>" + T.lot.legend + "</div></div>" +
+    "</div><div>" +
+      "<div class='box'><h3>" + fill(T.lot.result, { n:fmt(lot.n) }) + "</h3><table class='r'><tr><th></th><th>" + T.lot.cols.join("</th><th>") + "</th></tr>" + rows + "</table></div>" +
+      "<div class='box'><h3>" + T.lot.recent + "</h3><div class='recent'>" +
+        (lot.recent.length ? lot.recent.map(function(x){ return "<span>" + x[0] + " " + jobChip(NAMES[x[1]]) + "</span>"; }).join("") : "<span class='hint' style='border:0;background:none'>" + T.lot.none + "</span>") +
+      "</div></div>" +
+    "</div></div>";
+  each($("body").querySelectorAll("[data-draw]"), function(b){
+    b.addEventListener("click", function(){ lotDraw(+b.getAttribute("data-draw")); renderLot(); lotMsg(); });
+  });
+  $("lotreset").addEventListener("click", function(){ lotReset(); renderLot(); lotMsg(); });
+  each($("body").querySelectorAll("[data-tix]"), function(inp){
+    inp.addEventListener("change", function(){
+      var v = parseInt(inp.value, 10); if(isNaN(v) || v < 0) v = 0;
+      lot.tix[+inp.getAttribute("data-tix")] = v;
+      if(!lotTotal()) lot.tix[0] = 1;
+      lotReset(); renderLot(); lotMsg();
+    });
+  });
+}
+function lotMsg(){
+  if(!lot.n){ setMsg(T.lot.intro); return; }
+  var tot = lotTotal(), parts = [0, 1, 2].filter(function(j){ return lot.tix[j]; }).map(function(j){
+    return fill(T.lot.part, { j:NAMES[j], k:fmt(lot.cnt[j]), p:pct(lot.cnt[j], lot.n), q:pct(lot.tix[j], tot) });
+  });
+  setMsg(fill(T.lot.after, { n:fmt(lot.n) }) + parts.join(T.lot.sep) + T.lot.end + (lot.n < 200 ? T.lot.few : T.lot.many));
+}
+
+
+var walk = { winner:300, sorted:false };
+var BASELIST = [["A", 100], ["B", 50], ["C", 250]];
+function walkList(){ return walk.sorted ? [BASELIST[2], BASELIST[0], BASELIST[1]] : BASELIST; }
+function walkSteps(){
+  var L = walkList(), steps = [{ cur:-1, counter:0, line:[1, 2], kind:"start" }], c = 0;
+  for(var i = 0; i < L.length; i++){
+    c += L[i][1];
+    steps.push({ cur:i, counter:c, line:[3, 4, 5], kind:"visit", hit:c > walk.winner });
+    if(c > walk.winner){ steps.push({ cur:i, counter:c, line:[6, 7, 9], kind:"win" }); break; }
+  }
+  return steps;
+}
+var CODE = [
+  "int counter = 0;",
+  "int winner = getrandom(0, totaltickets);",
+  "node_t *current = head;",
+  "while (current) {",
+  "    counter = counter + current->tickets;",
+  "    if (counter > winner)",
+  "        break;            // found the winner",
+  "    current = current->next;",
+  "}",
+  "// 'current' is the winner: schedule it..."
+];
+function renderWalk(st){
+  var steps = walkSteps(), s = steps[Math.min(st, steps.length - 1)], L = walkList();
+  var hl = s.kind === "start" ? [0, 1, 2] : (s.kind === "visit" ? (s.hit ? [3, 4, 5] : [3, 4, 5, 7]) : [6, 9]);
+  var code = CODE.map(function(ln, i){
+    var m = ln.indexOf("//"), body = m >= 0 ? esc(ln.slice(0, m)) + "<span class='cm'>" + esc(ln.slice(m)) + "</span>" : esc(ln);
+    return "<span class='ln" + (hl.indexOf(i) >= 0 ? " hl" : "") + "'>" + body + "</span>";
+  }).join("");
+  var nodes = "<span class='arrow'>head →</span>" + L.map(function(x, i){
+    var cls = "node";
+    if(s.kind === "win" && i === s.cur) cls += " win";
+    else if(i === s.cur) cls += " cur";
+    else if(s.cur >= 0 && i < s.cur) cls += " past";
+    return "<div class='" + cls + "'><div class='nm' style='color:" + JOBCOLOR[x[0]] + "'>" + x[0] + "</div><div class='tk'>" + x[1] + " " + T.walk.tk + "</div></div><span class='arrow'>→</span>";
+  }).join("") + "<span class='arrow'>NULL</span>";
+  var cmp = "";
+  if(s.kind === "visit") cmp = "<div class='cmp'>" + fill(T.walk.cmp, { c:s.counter, w:walk.winner }) + " <b style='color:" + (s.hit ? "var(--green)" : "var(--amber)") + "'>" + (s.hit ? T.walk.yes : T.walk.no) + "</b></div>";
+  if(s.kind === "win") cmp = "<div class='cmp'>" + fill(T.walk.winTxt, { n:"<b style='color:" + JOBCOLOR[L[s.cur][0]] + "'>" + L[s.cur][0] + "</b>" }) + "</div>";
+  $("body").innerHTML =
+    "<div class='cols'><div class='box'><h3>" + T.walk.codeTitle + "</h3><div class='code'>" + code + "</div></div>" +
+    "<div class='box'><h3>" + T.walk.listTitle + "</h3><div class='list'>" + nodes + "</div>" +
+      "<div class='bigval'><div>winner<b>" + walk.winner + "</b></div><div>counter<b>" + s.counter + "</b></div><div>current<b>" + (s.cur >= 0 ? L[s.cur][0] : "A") + "</b></div></div>" + cmp +
+      numberLine(L, walk.winner) +
+      "<p class='hint' style='margin:4px 0 0'>" + T.walk.lineNote + "</p></div></div>";
+  var msgs = { start:T.walk.mStart, visit:(s.hit ? T.walk.mHit : T.walk.mMiss), win:(walk.sorted ? T.walk.mWinSorted : T.walk.mWin) };
+  setMsg(fill(msgs[s.kind], { name:s.cur >= 0 ? L[s.cur][0] : "", c:s.counter, w:walk.winner, t:s.cur >= 0 ? L[s.cur][1] : "" }));
+  setExtra("<span class='seg'><button data-ord='0' aria-pressed='" + !walk.sorted + "'>A → B → C</button><button data-ord='1' aria-pressed='" + walk.sorted + "'>C → A → B</button></span> " +
+    "<label class='field'>winner <input type='number' id='wv' min='0' max='399' value='" + walk.winner + "'></label> <button class='btn sm' id='wrnd'>" + T.walk.random + "</button>");
+  each($("extra").querySelectorAll("[data-ord]"), function(b){
+    b.addEventListener("click", function(){ walk.sorted = b.getAttribute("data-ord") === "1"; stopPlay(); step = 0; render(); });
+  });
+  $("wv").addEventListener("change", function(){ var v = parseInt($("wv").value, 10); if(!isNaN(v)){ walk.winner = Math.max(0, Math.min(399, v)); stopPlay(); step = 0; render(); } });
+  $("wrnd").addEventListener("click", function(){ walk.winner = rnd(400); stopPlay(); step = 0; render(); });
+}
+
+
+var fair = { trials:30, data:null, R:10, race:null, timer:0 };
+var LENS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+function oneTrial(R){
+  var left = [R, R], t = 0;
+  while(left[0] > 0 && left[1] > 0){ left[rnd(200) < 100 ? 0 : 1]--; t++; }
+  return t / (t + left[0] + left[1]);
+}
+function fairRun(){ fair.data = LENS.map(function(R){ var v = []; for(var i = 0; i < fair.trials; i++) v.push(oneTrial(R)); return v; }); }
+function fairChart(){
+  var W = 640, H = 250, padL = 40, padB = 28, padT = 10, padR = 16;
+  var lx = function(v){ return padL + Math.log10(v) / 3 * (W - padL - padR); };
+  var y = function(p){ return padT + (1 - p) * (H - padT - padB); };
+  var s = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' style='display:block'>";
+  [0, .2, .4, .6, .8, 1].forEach(function(p){
+    s += "<line x1='" + padL + "' x2='" + (W - padR) + "' y1='" + y(p) + "' y2='" + y(p) + "' stroke='#284a70'/><text x='" + (padL - 6) + "' y='" + (y(p) + 4) + "' text-anchor='end'>" + p.toFixed(1) + "</text>";
+  });
+  [1, 10, 100, 1000].forEach(function(d){
+    s += "<line x1='" + lx(d) + "' x2='" + lx(d) + "' y1='" + padT + "' y2='" + (H - padB) + "' stroke='#1d3c61'/><text x='" + lx(d) + "' y='" + (H - 9) + "' text-anchor='middle'>" + d + "</text>";
+  });
+  var avg = fair.data.map(function(v){ return v.reduce(function(a, b){ return a + b; }, 0) / v.length; });
+  fair.data.forEach(function(v, i){
+    v.forEach(function(u){ s += "<circle cx='" + (lx(LENS[i]) + (Math.random() - .5) * 8).toFixed(1) + "' cy='" + y(u).toFixed(1) + "' r='2.2' fill='#4A93D6' opacity='.28'/>"; });
+  });
+  s += "<polyline points='" + avg.map(function(a, i){ return lx(LENS[i]).toFixed(1) + "," + y(a).toFixed(1); }).join(" ") + "' fill='none' stroke='#2DC7D8' stroke-width='2.4'/>";
+  avg.forEach(function(a, i){ s += "<circle cx='" + lx(LENS[i]) + "' cy='" + y(a) + "' r='4' fill='#2DC7D8'/>"; });
+  s += "<text x='" + (W - padR - 4) + "' y='" + (H - padB - 7) + "' text-anchor='end'>" + T.fair.xLabel + " →</text></svg>";
+  return { svg:s, avg:avg };
+}
+function renderFair(){
+  if(!fair.data) fairRun();
+  var ch = fairChart();
+  var rows = LENS.map(function(R, i){ return "<tr><td>" + R + "</td><td>" + ch.avg[i].toFixed(2) + "</td></tr>"; }).join("");
+  $("body").innerHTML =
+    "<div class='cols wide'><div>" +
+      "<div class='box'><h3>" + T.fair.chart + "<span class='field'>" + T.fair.trials + " <select id='ftr'>" + [10, 30, 100].map(function(k){ return "<option" + (fair.trials === k ? " selected" : "") + ">" + k + "</option>"; }).join("") +
+        "</select> <button class='btn sm' id='frun'>" + T.fair.rerun + "</button></span></h3>" + ch.svg +
+        "<div class='legend'><span><i style='background:#2DC7D8'></i>" + T.fair.avg + "</span><span><i style='background:#4A93D6;opacity:.5'></i>" + T.fair.each + "</span></div></div>" +
+      "<div class='box'><h3>" + T.fair.raceTitle + "<span class='field'>R <select id='frR'>" + [2, 10, 100].map(function(k){ return "<option" + (fair.R === k ? " selected" : "") + ">" + k + "</option>"; }).join("") +
+        "</select> <button class='btn sm prim' id='frgo'>" + T.fair.go + "</button></span></h3><div id='raceview'></div></div>" +
+    "</div><div class='box'><h3>" + T.fair.table + "</h3><table class='r'><tr><th>R</th><th>" + T.fair.metric + "</th></tr>" + rows + "</table>" +
+      "<p class='hint' style='margin:10px 0 0'>" + T.fair.formula + "</p></div></div>";
+  $("ftr").addEventListener("change", function(){ fair.trials = +$("ftr").value; fairRun(); renderFair(); });
+  $("frun").addEventListener("click", function(){ fairRun(); renderFair(); });
+  $("frR").addEventListener("change", function(){ fair.R = +$("frR").value; });
+  $("frgo").addEventListener("click", raceStart);
+  raceView();
+  setMsg(T.fair.intro);
+}
+function raceStart(){
+  clearInterval(fair.timer);
+  fair.race = { R:fair.R, left:[fair.R, fair.R], t:0, first:0, done:false, last:-1 };
+  var per = Math.max(8, Math.min(140, 3000 / (2 * fair.R)));
+  fair.timer = setInterval(function(){
+    var r = fair.race;
+    if(r.done){ clearInterval(fair.timer); return; }
+    if(r.left[0] > 0 && r.left[1] > 0){ var w = rnd(200) < 100 ? 0 : 1; r.left[w]--; r.t++; r.last = w; if(!r.left[w]) r.first = r.t; }
+    else { var o = r.left[0] ? 0 : 1; r.left[o]--; r.t++; r.last = o; if(!r.left[o]){ r.done = true; } }
+    raceView();
+    if(r.done){ clearInterval(fair.timer); var u = r.first / r.t;
+      setMsg(fill(T.fair.raceDone, { R:r.R, f:r.first, s:r.t, u:u.toFixed(2) })); sayMsg(); }
+  }, per);
+}
+function raceView(){
+  var r = fair.race, v = $("raceview");
+  if(!v) return;
+  if(!r){ v.innerHTML = "<p class='hint' style='margin:0'>" + T.fair.raceHint + "</p>"; return; }
+  v.innerHTML = "<div class='race'>" + [0, 1].map(function(j){
+    var doneN = r.R - r.left[j];
+    return "<div class='lanebar'>" + jobChip(NAMES[j]) + "<div class='tr'><i style='width:" + (doneN / r.R * 100) + "%;background:" + JOBCOLOR[NAMES[j]] + "'></i></div><span>" + doneN + " / " + r.R + "</span></div>";
+  }).join("") + "</div><p class='hint' style='margin:8px 0 0'>t = " + r.t + (r.first ? "&nbsp;·&nbsp;" + fill(T.fair.firstAt, { f:r.first }) : "") + "</p>";
+}
+
+
+var BIG = 10000;
+var strd = null;
+function strideReset(){ strd = { jobs:[["A", 100, 0], ["B", 50, 0], ["C", 250, 0]], rows:[], runs:{ A:0, B:0, C:0, D:0 }, dAdded:false }; }
+strideReset();
+function strideOnce(){
+  var J = strd.jobs, cur = 0;
+  for(var i = 1; i < J.length; i++) if(J[i][2] < J[cur][2]) cur = i;
+  strd.rows.push({ pass:J.map(function(j){ return j[2]; }), who:cur, d:strd.dAdded });
+  J[cur][2] += BIG / J[cur][1];
+  strd.runs[J[cur][0]]++;
+}
+function renderStride(){
+  var J = strd.jobs, hasD = J.length > 3;
+  var head = "<tr>" + J.map(function(j){ return "<th>pass(" + j[0] + ")<br><span style='font-weight:400'>stride " + (BIG / j[1]) + "</span></th>"; }).join("") + "<th>" + T.stride.who + "</th></tr>";
+  var rows = strd.rows.map(function(r, i){
+    var min = Math.min.apply(null, r.pass);
+    var cells = J.map(function(j, k){ return k < r.pass.length ? "<td" + (k === r.who ? " class='min'" : "") + ">" + r.pass[k] + "</td>" : "<td>—</td>"; }).join("");
+    return "<tr" + (i === strd.rows.length - 1 ? " class='hl'" : "") + ">" + cells + "<td>" + jobChip(J[r.who][0]) + "</td></tr>";
+  }).join("");
+  var nowRow = "<tr><td colspan='" + (J.length + 1) + "' style='color:var(--dim);font-family:var(--sans)'>" + T.stride.now + " " + J.map(function(j){ return j[0] + " = " + j[2]; }).join(T.stride.sep) + "</td></tr>";
+  var total = J.reduce(function(a, j){ return a + j[1]; }, 0), n = strd.rows.length;
+  var runs = J.map(function(j){ return jobChip(j[0]) + " " + fill(T.stride.runFmt, { n:strd.runs[j[0]], q:pct(j[1], total) }); }).join("&nbsp;&nbsp;");
+  $("body").innerHTML =
+    "<div class='cols wide'><div class='box'><h3>" + T.stride.tableTitle + "</h3><div class='tbl' id='stbl'><table class='r'>" + head + rows + nowRow + "</table></div>" +
+      "<div class='runs'>" + fill(T.stride.ran, { n:n }) + "&nbsp;&nbsp;" + runs + "</div></div>" +
+    "<div><div class='box'><h3>" + T.stride.rule + "</h3><div class='code' style='font-size:12px'>" +
+      ["curr = remove_min(queue);     // min pass", "schedule(curr);               // run a quantum", "curr->pass += curr->stride;   // next pass", "insert(queue, curr);"].map(function(l){ var m = l.indexOf("//"); return "<span class='ln'>" + (m >= 0 ? esc(l.slice(0, m)) + "<span class='cm'>" + esc(l.slice(m)) + "</span>" : esc(l)) + "</span>"; }).join("") +
+      "</div><p class='hint' style='margin:10px 0 0'>" + T.stride.tickets + "</p>" +
+      "<div class='btns'><button class='btn prim' id='s1'>" + T.stride.one + "</button><button class='btn' id='s8'>" + T.stride.eight + "</button><button class='btn' id='sr'>" + T.ui.reset + "</button></div></div>" +
+      "<div class='box'><h3>" + T.stride.newJob + "</h3><p class='hint' style='margin:0 0 10px'>" + T.stride.newHint + "</p>" +
+      "<div class='btns' style='margin-top:0'><button class='btn' id='d0'" + (hasD ? " disabled" : "") + ">" + T.stride.d0 + "</button><button class='btn' id='dm'" + (hasD ? " disabled" : "") + ">" + T.stride.dmin + "</button></div></div></div></div>";
+  var tb = $("stbl"); tb.scrollTop = tb.scrollHeight;
+  $("s1").addEventListener("click", function(){ strideOnce(); renderStride(); strideMsg(); });
+  $("s8").addEventListener("click", function(){ for(var i = 0; i < 8; i++) strideOnce(); renderStride(); strideMsg(); });
+  $("sr").addEventListener("click", function(){ strideReset(); renderStride(); setMsg(T.stride.intro); });
+  var addD = function(useMin){
+    var p = useMin ? Math.min.apply(null, strd.jobs.map(function(j){ return j[2]; })) : 0;
+    strd.jobs.push(["D", 100, p]); strd.dAdded = true; strd.dMode = useMin;
+    renderStride(); setMsg(fill(useMin ? T.stride.addedMin : T.stride.added0, { p:p })); sayMsg();
+  };
+  $("d0").addEventListener("click", function(){ addD(false); });
+  $("dm").addEventListener("click", function(){ addD(true); });
+}
+function strideMsg(){
+  var n = strd.rows.length, J = strd.jobs;
+  if(J.length > 3){
+    var best = 0, run = 0;                               
+    strd.rows.forEach(function(r){ if(!r.d) return; run = J[r.who][0] === "D" ? run + 1 : 0; if(run > best) best = run; });
+    setMsg(fill(strd.dMode ? T.stride.afterMin : T.stride.after0, { d:strd.runs.D, k:best }));
+    return;
+  }
+  if(n === 8 && strd.runs.C === 5) setMsg(T.stride.eightDone); else setMsg(fill(T.stride.progress, { n:n }));
+}
+
+
+var WEIGHT = [88761, 71755, 56483, 46273, 36291, 29154, 23254, 18705, 14949, 11916, 9548, 7620, 6100, 4904, 3906,
+  3121, 2501, 1991, 1586, 1277, 1024, 820, 655, 526, 423, 335, 272, 215, 172, 137, 110, 87, 70, 56, 45, 36, 29, 23, 18, 15];
+var nice = [0, 5];
+function renderNice(){
+  var w = nice.map(function(n){ return WEIGHT[n + 20]; }), tot = w[0] + w[1];
+  var opts = function(sel){ var s = ""; for(var v = -20; v <= 19; v++) s += "<option value='" + v + "'" + (v === sel ? " selected" : "") + ">" + v + "</option>"; return s; };
+  var cards = [0, 1].map(function(j){
+    var p = pct(w[j], tot);
+    return "<div class='nc'><div class='top'>" + jobChip(NAMES[j]) + "<label class='field'>nice <select data-n='" + j + "'>" + opts(nice[j]) + "</select></label></div>" +
+      "<div class='sharebar' style='height:14px'><i style='width:" + p + "%;background:" + JOBCOLOR[NAMES[j]] + "'></i></div>" +
+      "<div class='pc' style='color:" + JOBCOLOR[NAMES[j]] + "'>" + p + "%</div><div class='w'>" + T.nice.weight + " " + fmt(w[j]) + "</div></div>";
+  }).join("");
+  var tbl = ""; for(var v = -20; v <= 19; v++) tbl += "<span class='" + (nice.indexOf(v) >= 0 ? "on" : "") + "'>" + v + ": " + WEIGHT[v + 20] + "</span>";
+  var real = nice[0] === 0 && nice[1] === 5 ? T.nice.real05 : (nice[0] === nice[1] ? T.nice.realEq : "");
+  $("body").innerHTML =
+    "<div class='cols wide'><div><div class='box'><h3>" + T.nice.cardsTitle + "</h3><div class='nicecards'>" + cards + "</div>" +
+      "<p style='margin:14px 0 0;font-family:var(--mono);font-size:14px'>" + fmt(w[0]) + " : " + fmt(w[1]) + " ≈ " + pct(w[0], tot) + " : " + pct(w[1], tot) + "</p>" +
+      (real ? "<p class='hint' style='margin:8px 0 0'>" + real + "</p>" : "") + "</div>" +
+      "<div class='box'><h3>" + T.nice.tableTitle + "</h3><div class='wtable'>" + tbl + "</div><p class='hint' style='margin:10px 0 0'>" + T.nice.tableNote + "</p></div></div>" +
+    "<div class='box'><h3>" + T.nice.howTitle + "</h3><div class='term'>" + T.nice.how + "</div></div></div>";
+  each($("body").querySelectorAll("[data-n]"), function(sel){
+    sel.addEventListener("change", function(){ nice[+sel.getAttribute("data-n")] = +sel.value; renderNice(); setMsg(fill(T.nice.after, { a:pct(w0(), tw()), b:pct(w1(), tw()) })); });
+  });
+}
+function w0(){ return WEIGHT[nice[0] + 20]; } function w1(){ return WEIGHT[nice[1] + 20]; } function tw(){ return w0() + w1(); }
+
+
+startEngine([
+  { name:T.tabs[0], ttl:T.tabTtl[0], note:T.tabNote[0], stepped:false, len:function(){ return 1; }, render:function(){ renderLot(); lotMsg(); } },
+  { name:T.tabs[1], ttl:T.tabTtl[1], note:T.tabNote[1], stepped:true, len:function(){ return walkSteps().length; }, render:renderWalk },
+  { name:T.tabs[2], ttl:T.tabTtl[2], note:T.tabNote[2], stepped:false, len:function(){ return 1; }, render:renderFair },
+  { name:T.tabs[3], ttl:T.tabTtl[3], note:T.tabNote[3], stepped:false, len:function(){ return 1; }, render:function(){ renderStride(); if(strd.rows.length) strideMsg(); else setMsg(T.stride.intro); } },
+  { name:T.tabs[4], ttl:T.tabTtl[4], note:T.tabNote[4], stepped:false, len:function(){ return 1; }, render:function(){ renderNice(); setMsg(T.nice.intro); } }
+]);
+</script>
+</body>
+</html>

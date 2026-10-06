@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>受限直接執行 一步一步看</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --navy:#0E1B2E; --navy2:#132741; --panel:#183253; --panel2:#1d3c61;
+    --line:#284a70; --line2:#33587f;
+    --ink:#EAF1F8; --mute:#9FB6CF; --dim:#6f89a4;
+    --blue:#4A93D6; --cyan:#2DC7D8; --amber:#F2B84B; --green:#54C878; --red:#EA6B5E;
+    --mono:"IBM Plex Mono","Consolas",monospace;
+    --sans:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; min-height:100vh; color:var(--ink); font-family:var(--sans);
+    background:radial-gradient(1200px 700px at 50% -10%, #17304f 0%, rgba(23,48,79,0) 60%), var(--navy);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1240px; margin:0 auto; padding:clamp(16px,3vw,30px) clamp(14px,3vw,26px) 28px;
+    display:flex; flex-direction:column; gap:clamp(10px,1.8vh,16px);}
+  a{color:var(--cyan);}
+
+  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--cyan); display:flex; align-items:center; gap:10px;}
+  .eyebrow::before{content:""; width:26px; height:2px; background:var(--cyan);}
+  h1{margin:4px 0 2px; font-weight:900; font-size:clamp(23px,3.6vw,34px); line-height:1.15;}
+  h1 span{color:var(--cyan);}
+  .sub{color:var(--mute); font-size:14px; line-height:1.6; margin:0;}
+
+  .tabs{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;}
+  .tabs button{font-family:var(--sans); font-size:13.5px; font-weight:700; color:var(--mute);
+    background:var(--navy2); border:1px solid var(--line); border-radius:999px;
+    padding:8px 16px; cursor:pointer; transition:.18s;}
+  .tabs button:hover{color:var(--ink); border-color:var(--line2);}
+  .tabs button[aria-selected="true"]{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+
+  .stage{background:linear-gradient(180deg,var(--navy2),rgba(19,39,65,.45));
+    border:1px solid var(--line); border-radius:16px; padding:clamp(14px,2.4vw,24px);}
+  .stagehead{display:flex; justify-content:space-between; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:14px;}
+  .stagehead h2{margin:0; font-size:clamp(17px,2.4vw,21px); font-weight:700;}
+  .stagehead .note{font-size:12.5px; color:var(--dim); font-family:var(--mono);}
+
+  .cols{display:grid; gap:14px; grid-template-columns:1fr 1fr;}
+  @media(max-width:900px){.cols{grid-template-columns:1fr;}}
+
+  .box{background:var(--navy); border:1px solid var(--line); border-radius:12px; padding:14px 16px;}
+  .box h3{margin:0 0 10px; font-size:13px; letter-spacing:.06em; color:var(--mute); font-weight:700;}
+
+  /* protocol table */
+  .proto{display:flex; flex-direction:column; gap:6px;}
+  .prow{display:grid; grid-template-columns:30px 1fr 1fr; gap:10px; align-items:stretch;
+    border:1px solid var(--line); border-radius:9px; overflow:hidden; opacity:.32; transition:.3s;}
+  .prow .n{display:flex; align-items:center; justify-content:center; font-family:var(--mono);
+    font-size:12px; font-weight:600; background:var(--panel); color:var(--mute);}
+  .prow .c{padding:9px 11px; font-size:13px; line-height:1.45; min-height:40px; display:flex; align-items:center;}
+  .prow .c.os{color:var(--amber);}
+  .prow .c.pg{color:var(--blue);}
+  .prow.on{opacity:1; border-color:var(--line2); background:rgba(45,199,216,.05);}
+  .prow.act{opacity:1; border-color:var(--cyan); background:rgba(45,199,216,.13); box-shadow:0 0 0 1px rgba(45,199,216,.35);}
+  .prow.act .n{background:var(--cyan); color:#06202c;}
+  .prow.never{opacity:.22;}
+  .prow.never .c{text-decoration:line-through; text-decoration-color:var(--red);}
+  .prow.stuck{border-color:var(--red); background:rgba(234,107,94,.14); box-shadow:0 0 0 1px rgba(234,107,94,.4);}
+  .prow.stuck .n{background:var(--red); color:#2a0b07;}
+  .prow.stuck .c.pg::after{content:"　← 卡在這裡，不 return"; color:var(--red); font-size:11.5px;}
+
+  /* cpu panel */
+  .cpu{display:flex; flex-direction:column; gap:10px;}
+  .who{border-radius:10px; padding:12px 14px; border:1px solid var(--line); background:var(--navy);
+    display:flex; align-items:center; gap:12px; transition:.3s;}
+  .who .dot{width:10px; height:10px; border-radius:50%; background:var(--dim); flex:none; transition:.3s;}
+  .who .lbl{font-weight:700; font-size:14px;}
+  .who .det{font-size:12px; color:var(--mute); margin-left:auto; font-family:var(--mono);}
+  .who.live{border-color:var(--cyan); background:rgba(45,199,216,.1);}
+  .who.live .dot{background:var(--cyan); box-shadow:0 0 10px var(--cyan);}
+  .who.warn{border-color:var(--red); background:rgba(234,107,94,.1);}
+  .who.warn .dot{background:var(--red); box-shadow:0 0 10px var(--red);}
+
+  .term{background:#08131f; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+    font-family:var(--mono); font-size:12.5px; line-height:1.65; color:#cfe3f5; min-height:150px; white-space:pre-wrap;}
+  .term .os{color:var(--amber);} .term .pg{color:var(--blue);} .term .ok{color:var(--green);} .term .no{color:var(--red);}
+
+  .msg{margin-top:12px; border-left:3px solid var(--cyan); background:rgba(45,199,216,.07);
+    padding:11px 14px; border-radius:0 9px 9px 0; font-size:13.5px; line-height:1.6; min-height:62px;}
+  .msg.bad{border-left-color:var(--red); background:rgba(234,107,94,.08);}
+  .msg b{color:var(--cyan);} .msg.bad b{color:var(--red);}
+
+  /* controls */
+  .ctl{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px;}
+  .ctl button{font-family:var(--sans); font-size:13px; font-weight:700; color:var(--ink);
+    background:var(--panel); border:1px solid var(--line2); border-radius:9px; padding:8px 15px; cursor:pointer; transition:.16s;}
+  .ctl button:hover:not(:disabled){background:var(--panel2); border-color:var(--cyan);}
+  .ctl button:disabled{opacity:.35; cursor:default;}
+  .ctl .prim{background:var(--cyan); border-color:var(--cyan); color:#06202c;}
+  .ctl .prim:hover{background:#51d8e6;}
+  .dots{display:flex; gap:6px; margin-left:auto;}
+  .dots i{width:8px; height:8px; border-radius:50%; background:var(--line2); cursor:pointer; transition:.2s;}
+  .dots i.on{background:var(--cyan); transform:scale(1.25);}
+
+  .seg{display:inline-flex; border:1px solid var(--line2); border-radius:9px; overflow:hidden;}
+  .seg button{border:0; border-radius:0; background:var(--navy2); padding:7px 14px; font-size:12.5px;}
+  .seg button[aria-pressed="true"]{background:var(--amber); color:#2a1d00;}
+
+  /* mode lab */
+  .ops{display:flex; flex-direction:column; gap:8px;}
+  .op{display:flex; align-items:center; gap:11px; border:1px solid var(--line); border-radius:10px;
+    padding:11px 13px; background:var(--navy); cursor:pointer; transition:.18s; text-align:left; width:100%;
+    font-family:var(--sans); color:var(--ink); font-size:13.5px;}
+  .op:hover{border-color:var(--line2); background:var(--panel);}
+  .op .ic{width:26px; height:26px; border-radius:7px; background:var(--panel2); flex:none;
+    display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:13px; color:var(--mute);}
+  .op.pass{border-color:var(--green); background:rgba(84,200,120,.09);}
+  .op.pass .ic{background:var(--green); color:#04220f;}
+  .op.fail{border-color:var(--red); background:rgba(234,107,94,.09);}
+  .op.fail .ic{background:var(--red); color:#2a0b07;}
+
+  .lanes{position:relative; height:230px; margin:6px 0 2px;}
+  .lane{position:absolute; left:92px; right:0; height:54px; border-radius:10px; border:1px solid var(--line);}
+  .lane.u{top:16px; background:rgba(74,147,214,.09);}
+  .lane.k{top:150px; background:rgba(242,184,75,.10);}
+  .lanelbl{position:absolute; left:0; width:84px; text-align:right; font-size:12px; font-weight:700; line-height:1.3;}
+  .lanelbl.u{top:26px; color:var(--blue);} .lanelbl.k{top:160px; color:var(--amber);}
+  .runner{position:absolute; height:26px; border-radius:6px; top:30px; left:104px; width:96px;
+    background:var(--blue); color:#02121f; font-size:11.5px; font-weight:700; display:flex; align-items:center;
+    justify-content:center; transition:all .55s cubic-bezier(.5,.05,.3,1);}
+  .runner.k{top:164px; background:var(--amber); color:#2a1d00;}
+  .xline{position:absolute; width:2px; background:var(--line2); left:0; top:0; height:0; transition:.4s;}
+
+  .tt{display:flex; flex-direction:column; gap:7px;}
+  .tt .e{display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; border:1px solid var(--line);
+    border-radius:9px; padding:10px 12px; font-size:13px; transition:.25s; opacity:.5;}
+  .tt .e .a{font-family:var(--mono); font-size:11.5px; color:var(--dim);}
+  .tt .e.hit{opacity:1; border-color:var(--cyan); background:rgba(45,199,216,.12);}
+  .tt .e.hit .a{color:var(--cyan);}
+
+  footer{color:var(--dim); font-family:var(--mono); font-size:11.5px; line-height:1.7; margin-top:6px;}
+  .kbd{font-family:var(--mono); font-size:11px; background:var(--panel); border:1px solid var(--line2);
+    border-radius:5px; padding:1px 6px; color:var(--mute);}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">OSTEP 第 6 章 · 第 3 週</div>
+  <h1><span>受限直接執行</span>　一步一步看</h1>
+  <p class="sub">程式怎麼直接在 CPU 上跑得又快又安全？四個小實驗：協定本身、兩種模式、系統呼叫的來回、陷阱表。</p>
+
+  <div class="tabs" id="tabs" role="tablist"></div>
+
+  <div class="stage">
+    <div class="stagehead">
+      <h2 id="ttl"></h2>
+      <div class="note" id="note"></div>
+    </div>
+    <div id="body"></div>
+    <div class="msg" id="msg"></div>
+    <div class="ctl">
+      <button id="prev">← 上一步</button>
+      <button id="next" class="prim">下一步 →</button>
+      <button id="reset">重來</button>
+      <span id="extra"></span>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+
+  <footer>
+    鍵盤：<span class="kbd">←</span> <span class="kbd">→</span> 逐步　·　<span class="kbd">R</span> 重來<br>
+    樹德科技大學 資訊工程系　·　作業系統　·　教材：OSTEP 第 6 章
+  </footer>
+</div>
+
+<script>
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var esc = function(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+
+/* ============================ 分頁 1：直接執行協定 ============================ */
+var PROTO = [
+  { n:"1", os:"建立行程條目、分配記憶體", pg:"" },
+  { n:"2", os:"載入程式碼、設定程式堆疊 (argc/argv)", pg:"" },
+  { n:"3", os:"清除暫存器、call main()", pg:"" },
+  { n:"4", os:"", pg:"執行 main()…，從 main return" },
+  { n:"5", os:"釋放記憶體、從行程列表移除", pg:"" }
+];
+
+var protoMode = "good";   // good | bad
+var protoSteps = {
+  good:[
+    { row:-1, cpu:"os",  term:"", msg:"OS 準備要跑一個程式。按「下一步」開始走圖 6.1 的協定。" },
+    { row:0,  cpu:"os",  term:"<span class='os'>[OS] 建立行程條目、配置記憶體</span>", msg:"<b>步驟 1</b>　OS 在行程列表裡建一筆資料，並替程式配一塊記憶體。" },
+    { row:1,  cpu:"os",  term:"<span class='os'>[OS] 載入程式碼、設好堆疊 argc/argv</span>", msg:"<b>步驟 2</b>　把程式從磁碟載進記憶體，準備好堆疊與 argc/argv。" },
+    { row:2,  cpu:"os",  term:"<span class='os'>[OS] 清除暫存器、call main()</span>", msg:"<b>步驟 3</b>　交棒。注意用的是<b>一般的 call</b>——和你呼叫任何函式完全一樣，沒有任何檢查。" },
+    { row:3,  cpu:"pg",  term:"<span class='pg'>[程式] 我開始跑了，argc = 3</span>\n<span class='pg'>[程式] 1+..+100 = 5050</span>", msg:"<b>步驟 4</b>　控制權在程式手上，<b>OS 現在不在 CPU 上</b>。它只能等程式 return。" },
+    { row:3,  cpu:"pg",  term:"<span class='pg'>[程式] 做完了，我 return 42</span>", msg:"程式跑完，<b>乖乖 return</b>，控制權回到 OS。" },
+    { row:4,  cpu:"os",  term:"<span class='os'>[OS] 從 main return，回傳值 = 42</span>\n<span class='os'>[OS] 釋放記憶體、移除行程</span>  <span class='ok'>✓</span>", msg:"<b>步驟 5</b>　OS 收尾。協定走完了——看起來很順利，對吧？換上面的切換鈕試試「壞程式」。" }
+  ],
+  bad:[
+    { row:-1, cpu:"os",  term:"", msg:"這次要跑的程式裡有一行 <code>while(1);</code>。前三步完全一樣。" },
+    { row:0,  cpu:"os",  term:"<span class='os'>[OS] 建立行程條目、配置記憶體</span>", msg:"<b>步驟 1</b>　一模一樣。OS 沒辦法從外觀看出這支程式有問題。" },
+    { row:1,  cpu:"os",  term:"<span class='os'>[OS] 載入程式碼、設好堆疊 argc/argv</span>", msg:"<b>步驟 2</b>　一模一樣。協定裡沒有任何「檢查程式會不會亂來」的步驟。" },
+    { row:2,  cpu:"os",  term:"<span class='os'>[OS] 清除暫存器、call main()</span>", msg:"<b>步驟 3</b>　交棒出去了。<b>這一刻之後，OS 就不在 CPU 上了。</b>" },
+    { row:3,  cpu:"bad", term:"<span class='pg'>[程式] 我不打算 return</span>\n<span class='pg'>[程式] 還在跑…… 1 秒</span>", msg:"程式進了無窮迴圈。OS 在等一個永遠不會來的 return。" },
+    { row:3,  cpu:"bad", term:"<span class='pg'>[程式] 還在跑…… 2 秒</span>\n<span class='pg'>[程式] 還在跑…… 3 秒</span>", msg:"還在等。<b>OS 沒有任何辦法把 CPU 搶回來</b>——它根本沒在執行。" },
+    { row:3,  cpu:"bad", term:"<span class='pg'>[程式] 還在跑…… 4 秒</span>\n<span class='no'>永遠卡在步驟 4：程式不 return</span>\n<span class='no'>步驟 5 永遠不會發生</span>", msg:"這就是課本說的<b>第二個漏洞</b>：程式卡在步驟 4 不放手，OS 連步驟 5 都走不到。沒有限制的直接執行，遇到這種程式只能重開機。下一章的答案是<b>時鐘中斷</b>。", bad:true, stuck:true }
+  ]
+};
+
+function renderProto(st){
+  var s = protoSteps[protoMode][st];
+  var rows = PROTO.map(function(r, i){
+    var cls = "prow";
+    if(s.stuck && i === 3) cls += " act stuck";          // 卡在步驟 4：還在跑，但永遠跑不完
+    else if(s.stuck && i === 4) cls += " never";         // 步驟 5 永遠輪不到
+    else if(i === s.row) cls += " act";
+    else if(i < s.row) cls += " on";
+    return "<div class='" + cls + "'><div class='n'>" + r.n + "</div>" +
+           "<div class='c os'>" + esc(r.os) + "</div>" +
+           "<div class='c pg'>" + esc(r.pg) + "</div></div>";
+  }).join("");
+
+  var cpuCls = s.cpu === "pg" ? "live" : (s.cpu === "bad" ? "warn" : "live");
+  var cpuTxt = s.cpu === "os" ? "作業系統（核心）" : "使用者程式";
+  var cpuDet = s.cpu === "bad" ? "程式不放手" : (s.cpu === "pg" ? "OS 不在 CPU 上" : "OS 在 CPU 上");
+
+  $("body").innerHTML =
+    "<div class='cols'>" +
+      "<div class='box'><h3>圖 6.1　直接執行協定</h3>" +
+        "<div style='display:grid;grid-template-columns:30px 1fr 1fr;gap:10px;margin-bottom:6px;font-size:11.5px;color:var(--dim);'>" +
+        "<div></div><div>作業系統</div><div>程式</div></div>" +
+        "<div class='proto'>" + rows + "</div></div>" +
+      "<div class='box'><h3>現在誰在 CPU 上</h3>" +
+        "<div class='cpu'><div class='who " + cpuCls + "'><div class='dot'></div>" +
+          "<div class='lbl'>" + cpuTxt + "</div><div class='det'>" + cpuDet + "</div></div>" +
+          "<div class='term'>" + (s.term || "<span style='color:#456'>（還沒有輸出）</span>") + "</div>" +
+        "</div></div>" +
+    "</div>";
+  $("msg").className = "msg" + (s.bad ? " bad" : "");
+  $("msg").innerHTML = s.msg;
+  $("extra").innerHTML =
+    "<span class='seg'><button data-pm='good' aria-pressed='" + (protoMode==="good") + "'>乖乖 return 的程式</button>" +
+    "<button data-pm='bad' aria-pressed='" + (protoMode==="bad") + "'>while(1) 的程式</button></span>";
+  Array.prototype.forEach.call($("extra").querySelectorAll("[data-pm]"), function(b){
+    b.addEventListener("click", function(){ protoMode = b.getAttribute("data-pm"); step = 0; render(); });
+  });
+}
+
+/* ============================ 分頁 2：兩種模式 ============================ */
+var OPS = [
+  { t:"算 1+2+…+100", u:true,  k:true,  why:"純運算，不碰任何受保護的東西。使用者模式完全允許。" },
+  { t:"讀自己配置到的記憶體", u:true, k:true, why:"那塊記憶體本來就是分給這個行程的，可以讀。" },
+  { t:"呼叫 getpid() 問自己的行程編號", u:true, k:true, why:"這是<b>系統呼叫</b>——不是自己動手，而是請核心幫忙。核心開的小門，走這條路可以。" },
+  { t:"直接對磁碟發 I/O 指令", u:false, k:true, why:"特權操作。若使用者程式能直接發 I/O，檔案權限就形同虛設——它可以把別人的檔案整顆讀走。" },
+  { t:"讀別的行程的記憶體", u:false, k:true, why:"使用者模式不能存取任意實體記憶體，否則密碼、金鑰全都藏不住。" },
+  { t:"執行 cli（關掉中斷）", u:false, k:true, why:"最致命的一個。若使用者程式能關中斷，時鐘中斷就永遠不會來，<b>OS 再也拿不回 CPU</b>——第 6 章後半的整套機制就垮了。實測：在 x86 上執行它，行程會收到 SIGSEGV。" },
+  { t:"改寫陷阱表", u:false, k:true, why:"陷阱表決定「出事時跳去哪」。能改它就等於能接管整台機器，所以設定陷阱表本身就是特權操作。" }
+];
+var modeSel = null, modeKernel = false;
+
+function renderMode(){
+  var ops = OPS.map(function(o, i){
+    var cls = "op", ic = "?";
+    if(modeSel === i){
+      var allowed = modeKernel ? o.k : o.u;
+      cls += allowed ? " pass" : " fail";
+      ic = allowed ? "✓" : "✗";
+    }
+    return "<button class='" + cls + "' data-op='" + i + "'><span class='ic'>" + ic + "</span>" + o.t + "</button>";
+  }).join("");
+
+  var expl = modeSel === null
+    ? "<span style='color:var(--dim)'>點一個操作，看它在目前的模式下能不能做。</span>"
+    : (function(){
+        var o = OPS[modeSel], allowed = modeKernel ? o.k : o.u;
+        return "<b style='color:" + (allowed ? "var(--green)" : "var(--red)") + "'>" +
+               (allowed ? "可以" : "被擋下來") + "</b>　" + o.why;
+      })();
+
+  $("body").innerHTML =
+    "<div class='cols'>" +
+      "<div class='box'><h3>試試看這些操作</h3><div class='ops'>" + ops + "</div></div>" +
+      "<div class='box'><h3>目前的模式</h3>" +
+        "<div class='who " + (modeKernel ? "warn" : "live") + "' style='margin-bottom:12px'>" +
+          "<div class='dot'></div><div class='lbl'>" + (modeKernel ? "核心模式 kernel mode" : "使用者模式 user mode") + "</div>" +
+          "<div class='det'>" + (modeKernel ? "OS 在跑" : "你的程式在跑") + "</div></div>" +
+        "<div style='font-size:13px;line-height:1.65;color:var(--mute);'>" +
+          (modeKernel
+            ? "核心模式什麼都能做：發 I/O、存取整台機器的記憶體、關中斷、改陷阱表。<br><br>OS 就是在這個模式下執行的。"
+            : "使用者模式受到限制。想做特權操作，只能<b style='color:var(--cyan)'>透過系統呼叫請核心幫忙</b>，不能自己動手。") +
+        "</div>" +
+        "<div style='margin-top:14px;font-size:13.5px;line-height:1.6;min-height:96px;'>" + expl + "</div>" +
+      "</div>" +
+    "</div>";
+
+  Array.prototype.forEach.call($("body").querySelectorAll("[data-op]"), function(b){
+    b.addEventListener("click", function(){ modeSel = +b.getAttribute("data-op"); render(); });
+  });
+  $("msg").className = "msg";
+  $("msg").innerHTML = "這兩種模式就是 OS 保住控制權的根本。<b>切換上面的模式</b>，同一個操作結果會完全不同——差別不在程式碼，而在 CPU 現在處於哪個模式。";
+  $("extra").innerHTML =
+    "<span class='seg'><button data-mk='0' aria-pressed='" + (!modeKernel) + "'>使用者模式</button>" +
+    "<button data-mk='1' aria-pressed='" + modeKernel + "'>核心模式</button></span>";
+  Array.prototype.forEach.call($("extra").querySelectorAll("[data-mk]"), function(b){
+    b.addEventListener("click", function(){ modeKernel = b.getAttribute("data-mk") === "1"; render(); });
+  });
+}
+
+/* ============================ 分頁 3：系統呼叫的來回 ============================ */
+var TRIP = [
+  { pos:"u", x:104, w:150, lbl:"程式 main()", term:"", msg:"程式在<b>使用者模式</b>跑。這是它待最久的地方。" },
+  { pos:"u", x:104, w:150, lbl:"呼叫 open()", term:"<span class='pg'>呼叫 open(\"/tmp/f\", O_RDONLY)</span>", msg:"程式要開檔案。開檔要碰磁碟，是特權操作——使用者模式做不到。" },
+  { pos:"u", x:104, w:150, lbl:"libc 放好編號", term:"<span class='pg'>libc: mov $SYS_open, %rax</span>", msg:"libc 把<b>系統呼叫編號</b>放進暫存器。注意：程式給的是<b>編號</b>，不是核心的位址——不然就能跳到任意地方繞過檢查。" },
+  { pos:"k", x:230, w:180, lbl:"trap 進核心", term:"<span class='no'>trap!</span> <span class='os'>硬體：存暫存器 → 核心堆疊</span>\n<span class='os'>硬體：升到核心模式</span>\n<span class='os'>硬體：查陷阱表 → 跳到處理程式</span>", msg:"<b>trap</b>。硬體自動做三件事：存暫存器、升權限、依陷阱表跳到系統呼叫處理程式。" },
+  { pos:"k", x:230, w:180, lbl:"核心做事", term:"<span class='os'>[核心] 檢查引數合不合法</span>\n<span class='os'>[核心] 真的去開檔案</span>\n<span class='os'>[核心] 回傳值 fd = 3</span>", msg:"核心先<b>檢查引數</b>（課本 TIP：不要相信使用者輸入），再真的做事。" },
+  { pos:"u", x:430, w:150, lbl:"回到程式", term:"<span class='ok'>return-from-trap</span>\n<span class='os'>硬體：還原暫存器、降回使用者模式</span>\n<span class='pg'>fd = 3，程式繼續跑</span>", msg:"<b>return-from-trap</b>。硬體還原暫存器、降回使用者模式，程式像沒事一樣繼續。" },
+  { pos:"u", x:430, w:150, lbl:"繼續執行", term:"<span class='pg'>程式繼續用 fd 讀檔…</span>", msg:"整趟來回結束。<b>程式幾乎都待在使用者模式</b>，只有 trap 到 return-from-trap 之間那一小段在核心裡。" }
+];
+
+function renderTrip(st){
+  var s = TRIP[st];
+  $("body").innerHTML =
+    "<div class='box' style='margin-bottom:14px'><h3>圖 6.2　一次系統呼叫的來回</h3>" +
+      "<div class='lanes'>" +
+        "<div class='lanelbl u'>使用者<br>模式</div><div class='lane u'></div>" +
+        "<div class='lanelbl k'>核心<br>模式</div><div class='lane k'></div>" +
+        "<div class='runner " + (s.pos === "k" ? "k" : "") + "' style='left:" + s.x + "px;width:" + s.w + "px'>" + esc(s.lbl) + "</div>" +
+      "</div>" +
+      "<div style='display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--dim);padding:0 4px;'>" +
+      "<span>時間 →</span><span>" + (st + 1) + " / " + TRIP.length + "</span></div>" +
+    "</div>" +
+    "<div class='term'>" + (s.term || "<span style='color:#456'>（還沒有輸出）</span>") + "</div>";
+  $("msg").className = "msg";
+  $("msg").innerHTML = s.msg;
+  $("extra").innerHTML = "";
+}
+
+/* ============================ 分頁 4：陷阱表 ============================ */
+var EVENTS = [
+  { t:"程式呼叫 open()", h:0, why:"一般的系統呼叫，跳到系統呼叫處理程式。核心做完事就 return-from-trap 回去。" },
+  { t:"時鐘每 10ms 響一次", h:1, why:"時鐘中斷。OS 因此重新拿到 CPU，可以決定要不要換行程——這就是搶佔的基礎。" },
+  { t:"程式讀了不該讀的位址", h:2, why:"非法記憶體存取。OS 送出 <b>SIGSEGV</b>（11 號訊號）把這個行程殺掉——就是你看到的 Segmentation fault。" },
+  { t:"程式執行了一條不存在的指令", h:3, why:"非法指令，例如 x86 故意保留、專門用來觸發這個例外的 ud2。OS 送出 <b>SIGILL</b> 把行程殺掉。<br>對照：<b>cli 不一樣</b>——它是存在的指令、只是沒權限。x86 對這種情況觸發的是「一般保護例外」，行程收到的是 SIGSEGV（mode_demo 實測）。" }
+];
+var HANDLERS = [
+  { n:"系統呼叫處理程式", a:"0xffff8000_1200" },
+  { n:"時鐘中斷處理程式", a:"0xffff8000_1a40" },
+  { n:"非法記憶體處理程式", a:"0xffff8000_2100" },
+  { n:"非法指令處理程式", a:"0xffff8000_2380" }
+];
+var evSel = null;
+
+function renderTrap(){
+  var evs = EVENTS.map(function(e, i){
+    return "<button class='op" + (evSel === i ? " pass" : "") + "' data-ev='" + i + "'>" +
+           "<span class='ic'>" + (evSel === i ? "→" : "·") + "</span>" + e.t + "</button>";
+  }).join("");
+  var tt = HANDLERS.map(function(h, i){
+    return "<div class='e" + (evSel !== null && EVENTS[evSel].h === i ? " hit" : "") + "'>" +
+           "<div>" + h.n + "</div><div class='a'>" + h.a + "</div></div>";
+  }).join("");
+
+  $("body").innerHTML =
+    "<div class='cols'>" +
+      "<div class='box'><h3>發生了這些事……</h3><div class='ops'>" + evs + "</div>" +
+        "<div style='margin-top:14px;font-size:13px;line-height:1.6;color:var(--mute);min-height:74px;'>" +
+        (evSel === null ? "<span style='color:var(--dim)'>點一個事件，看硬體會跳去哪。</span>" : EVENTS[evSel].why) +
+        "</div></div>" +
+      "<div class='box'><h3>陷阱表（開機時由 OS 填好）</h3><div class='tt'>" + tt + "</div>" +
+        "<div style='margin-top:14px;font-size:12.5px;line-height:1.6;color:var(--mute);'>" +
+        "硬體記住這張表直到下次重開機。<br><b style='color:var(--amber)'>填這張表本身就是特權操作</b>——否則使用者程式裝一張自己的表，就能接管整台機器。</div>" +
+      "</div>" +
+    "</div>";
+  Array.prototype.forEach.call($("body").querySelectorAll("[data-ev]"), function(b){
+    b.addEventListener("click", function(){ evSel = +b.getAttribute("data-ev"); render(); });
+  });
+  $("msg").className = "msg";
+  $("msg").innerHTML = "陷阱表是<b>硬體與 OS 的約定</b>：OS 在開機時說好「發生什麼事就跳去哪」，之後硬體照做。有了它，程式才能安全地直接跑——出任何狀況，控制權都會自動回到 OS 手上。";
+  $("extra").innerHTML = "";
+}
+
+/* ============================ 分頁架構 ============================ */
+var TABS = [
+  { id:"proto", name:"① 直接執行協定", ttl:"圖 6.1：協定走一次，然後看它的漏洞", note:"OSTEP §6.1",
+    len:function(){ return protoSteps[protoMode].length; }, render:renderProto, stepped:true },
+  { id:"mode",  name:"② 兩種模式", ttl:"使用者模式能做什麼、不能做什麼", note:"OSTEP §6.2",
+    len:function(){ return 1; }, render:renderMode, stepped:false },
+  { id:"trip",  name:"③ 系統呼叫的來回", ttl:"圖 6.2：trap 進去，return-from-trap 回來", note:"OSTEP §6.2",
+    len:function(){ return TRIP.length; }, render:renderTrip, stepped:true },
+  { id:"trap",  name:"④ 陷阱表", ttl:"開機時說好：出事跳去哪", note:"OSTEP §6.2",
+    len:function(){ return 1; }, render:renderTrap, stepped:false }
+];
+var tab = 0, step = 0;
+
+function render(){
+  var T = TABS[tab];
+  $("ttl").textContent = T.ttl;
+  $("note").textContent = T.note;
+  T.render(step);
+
+  var n = T.len();
+  $("prev").disabled = !T.stepped || step === 0;
+  $("next").disabled = !T.stepped || step >= n - 1;
+  $("prev").style.display = $("next").style.display = T.stepped ? "" : "none";
+  $("reset").style.display = T.stepped ? "" : "none";
+  $("dots").innerHTML = T.stepped
+    ? Array.apply(null, Array(n)).map(function(_, i){ return "<i class='" + (i === step ? "on" : "") + "' data-d='" + i + "'></i>"; }).join("")
+    : "";
+  Array.prototype.forEach.call($("dots").querySelectorAll("[data-d]"), function(d){
+    d.addEventListener("click", function(){ step = +d.getAttribute("data-d"); render(); });
+  });
+  Array.prototype.forEach.call($("tabs").children, function(b, i){
+    b.setAttribute("aria-selected", i === tab ? "true" : "false");
+  });
+}
+
+$("tabs").innerHTML = TABS.map(function(t){ return "<button role='tab'>" + t.name + "</button>"; }).join("");
+Array.prototype.forEach.call($("tabs").children, function(b, i){
+  b.addEventListener("click", function(){ tab = i; step = 0; modeSel = null; evSel = null; render(); });
+});
+$("prev").addEventListener("click", function(){ if(step > 0){ step--; render(); } });
+$("next").addEventListener("click", function(){ if(step < TABS[tab].len() - 1){ step++; render(); } });
+$("reset").addEventListener("click", function(){ step = 0; render(); });
+document.addEventListener("keydown", function(e){
+  if(e.key === "ArrowLeft"){ if(step > 0){ step--; render(); } }
+  else if(e.key === "ArrowRight"){ if(step < TABS[tab].len() - 1){ step++; render(); } }
+  else if(e.key === "r" || e.key === "R"){ step = 0; render(); }
+});
+render();
+</script>
+</body>
+</html>
